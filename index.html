@@ -85,6 +85,16 @@
             transform: translateX(-50%);
             z-index: 1000;
             display: none;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 10px;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #controls-main, #controls-manipulation {
+            display: flex;
+            margin-top: 10px;
         }
         
         .control-button {
@@ -101,6 +111,54 @@
         
         .control-button:hover {
             background: rgba(255,255,255,1);
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+            color: white;
+            font-size: 14px;
+        }
+
+        .slider-container label {
+            margin-right: 10px;
+            width: 50px;
+            text-align: right;
+        }
+
+        .slider-container input[type="range"] {
+            width: 150px;
+            -webkit-appearance: none;
+            height: 8px;
+            background: #d3d3d3;
+            outline: none;
+            opacity: 0.7;
+            -webkit-transition: .2s;
+            transition: opacity .2s;
+            border-radius: 5px;
+        }
+
+        .slider-container input[type="range"]:hover {
+            opacity: 1;
+        }
+
+        .slider-container input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #007bff;
+            cursor: pointer;
+        }
+
+        .slider-container input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #007bff;
+            cursor: pointer;
         }
         
         canvas {
@@ -139,18 +197,27 @@
         </div>
         
         <div id="controls">
-            <button class="control-button" id="resetButton">Reset Objek</button>
-            <button class="control-button" id="exitButton">Keluar AR</button>
+            <div id="controls-main">
+                <button class="control-button" id="resetButton">Reset Objek</button>
+                <button class="control-button" id="exitButton">Keluar AR</button>
+            </div>
+            <div id="controls-manipulation" style="display: none;">
+                <div class="slider-container">
+                    <label for="scaleSlider">Skala:</label>
+                    <input type="range" id="scaleSlider" min="0.1" max="5" value="1" step="0.1">
+                </div>
+                <div class="slider-container">
+                    <label for="rotateSlider">Rotasi Y:</label>
+                    <input type="range" id="rotateSlider" min="0" max="360" value="0" step="5">
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Three.js -->
     <script src="https://unpkg.com/three@0.126.0/build/three.js"></script>
-    <!-- GLTFLoader -->
     <script src="https://unpkg.com/three@0.126.0/examples/js/loaders/GLTFLoader.js"></script>
 
     <script>
-        // AR Object Placement dengan texture support yang diperbaiki
         class ARObjectPlacement {
             constructor() {
                 this.canvas = null;
@@ -163,10 +230,10 @@
                 this.viewerSpace = null;
                 this.hitTestSource = null;
                 
-                // Models
                 this.reticle = null;
                 this.arObject = null;
                 this.placedObjects = [];
+                this.selectedObject = null;
                 
                 this.init();
             }
@@ -210,39 +277,31 @@
                 try {
                     const loader = new THREE.GLTFLoader();
                     
-                    // Load reticle
                     const reticleGltf = await this.loadGLTF(loader, 'https://immersive-web.github.io/webxr-samples/media/gltf/reticle/reticle.gltf');
                     this.reticle = reticleGltf.scene;
                     this.reticle.visible = false;
                     
-                    // Load AR object - GANTI URL INI DENGAN MODEL GLB ANDA
                     const objectGltf = await this.loadGLTF(loader, 'tower_house_design.glb');
                     this.arObject = objectGltf.scene;
                     
-                    // PERBAIKAN PENTING: Traverse semua materials untuk memastikan texture muncul
                     this.arObject.traverse((child) => {
                         if (child.isMesh) {
-                            // Pastikan material menerima cahaya dengan benar
                             if (child.material) {
-                                // Jika array of materials
                                 if (Array.isArray(child.material)) {
                                     child.material.forEach(mat => {
                                         mat.needsUpdate = true;
-                                        // Untuk texture yang benar
                                         if (mat.map) {
                                             mat.map.encoding = THREE.sRGBEncoding;
                                         }
                                     });
                                 } else {
                                     child.material.needsUpdate = true;
-                                    // Untuk texture yang benar
                                     if (child.material.map) {
                                         child.material.map.encoding = THREE.sRGBEncoding;
                                     }
                                 }
                             }
                             
-                            // Cast shadows jika dibutuhkan
                             child.castShadow = true;
                             child.receiveShadow = true;
                         }
@@ -272,109 +331,94 @@
                 const startButton = document.getElementById('startButton');
                 const resetButton = document.getElementById('resetButton');
                 const exitButton = document.getElementById('exitButton');
+                const scaleSlider = document.getElementById('scaleSlider');
+                const rotateSlider = document.getElementById('rotateSlider');
                 
                 startButton.addEventListener('click', () => this.startAR());
                 resetButton.addEventListener('click', () => this.resetObjects());
                 exitButton.addEventListener('click', () => this.exitAR());
+
+                scaleSlider.addEventListener('input', (event) => this.onScaleChange(event.target.value));
+                rotateSlider.addEventListener('input', (event) => this.onRotateChange(event.target.value));
             }
             
             async startAR() {
                 try {
-                    // Setup canvas and WebGL context
                     this.canvas = document.createElement("canvas");
                     document.body.appendChild(this.canvas);
                     this.gl = this.canvas.getContext("webgl", {
                         xrCompatible: true,
                         alpha: true,
-                        antialias: true  // PERBAIKAN: Tambahkan antialiasing
+                        antialias: true
                     });
                     
                     if (!this.gl) {
                         throw new Error("WebGL not supported");
                     }
                     
-                    // Create scene
                     this.scene = new THREE.Scene();
                     
-                    // PERBAIKAN: Tingkatkan intensitas cahaya untuk texture yang lebih terang
-                    // Directional light lebih terang
-                    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);  // Dinaikkan dari 0.3 ke 1.0
+                    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
                     directionalLight.position.set(10, 15, 10);
                     this.scene.add(directionalLight);
                     
-                    // Tambah cahaya dari arah lain
                     const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.5);
                     directionalLight2.position.set(-10, 10, -10);
                     this.scene.add(directionalLight2);
                     
-                    // Ambient light lebih terang
-                    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);  // Dinaikkan dari 0.4 ke 0.8
+                    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
                     this.scene.add(ambientLight);
                     
-                    // PERBAIKAN: Tambahkan hemisphere light untuk pencahayaan lebih natural
                     const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
                     hemiLight.position.set(0, 20, 0);
                     this.scene.add(hemiLight);
                     
-                    // Add reticle to scene
                     this.scene.add(this.reticle);
                     
-                    // PERBAIKAN: Setup renderer dengan konfigurasi yang lebih baik untuk texture
                     this.renderer = new THREE.WebGLRenderer({
                         alpha: true,
                         preserveDrawingBuffer: true,
                         canvas: this.canvas,
                         context: this.gl,
-                        antialias: true  // PERBAIKAN: Tambahkan antialiasing
+                        antialias: true
                     });
                     this.renderer.autoClear = false;
                     
-                    // PERBAIKAN: Set output encoding untuk texture yang benar
                     this.renderer.outputEncoding = THREE.sRGBEncoding;
                     
-                    // PERBAIKAN: Enable physically correct lighting
                     this.renderer.physicallyCorrectLights = true;
                     
-                    // PERBAIKAN: Set tone mapping untuk exposure yang lebih baik
                     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
                     this.renderer.toneMappingExposure = 1.0;
                     
-                    // Setup camera
                     this.camera = new THREE.PerspectiveCamera();
                     this.camera.matrixAutoUpdate = false;
                     
-                    // Request XR session
                     this.session = await navigator.xr.requestSession("immersive-ar", {
                         requiredFeatures: ['hit-test'],
                         optionalFeatures: ['dom-overlay'],
                         domOverlay: { root: document.getElementById('container') }
                     });
                     
-                    // Setup session
                     this.session.updateRenderState({
                         baseLayer: new XRWebGLLayer(this.session, this.gl)
                     });
                     
-                    // Setup reference spaces
                     this.referenceSpace = await this.session.requestReferenceSpace('local');
                     this.viewerSpace = await this.session.requestReferenceSpace('viewer');
                     
-                    // Setup hit test source
                     this.hitTestSource = await this.session.requestHitTestSource({ 
                         space: this.viewerSpace 
                     });
                     
-                    // Add event listeners
                     this.session.addEventListener('end', () => this.onSessionEnded());
-                    this.session.addEventListener('select', () => this.onSelect());
+                    this.session.addEventListener('select', (event) => this.onSelect(event));
                     
-                    // Start render loop
                     this.session.requestAnimationFrame((time, frame) => this.onXRFrame(time, frame));
                     
-                    // Update UI
                     document.getElementById('ui').style.display = 'none';
                     document.getElementById('instructions').style.display = 'block';
-                    document.getElementById('controls').style.display = 'block';
+                    document.getElementById('controls').style.display = 'flex';
                     
                     console.log('AR session started successfully');
                     
@@ -386,33 +430,25 @@
             }
             
             onXRFrame(time, frame) {
-                // Queue next frame
                 this.session.requestAnimationFrame((time, frame) => this.onXRFrame(time, frame));
                 
-                // Bind framebuffer
                 this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.session.renderState.baseLayer.framebuffer);
                 
-                // Get viewer pose
                 const pose = frame.getViewerPose(this.referenceSpace);
                 
                 if (pose) {
-                    // Clear the scene
                     this.renderer.clear();
                     
-                    // Handle hit test
                     this.handleHitTest(frame);
                     
-                    // Render each view (typically just one for mobile AR)
                     for (const view of pose.views) {
                         const viewport = this.session.renderState.baseLayer.getViewport(view);
                         this.renderer.setSize(viewport.width, viewport.height);
                         
-                        // Update camera
                         this.camera.matrix.fromArray(view.transform.matrix);
                         this.camera.projectionMatrix.fromArray(view.projectionMatrix);
                         this.camera.updateMatrixWorld(true);
                         
-                        // Render
                         this.renderer.render(this.scene, this.camera);
                     }
                 }
@@ -438,29 +474,90 @@
                 }
             }
             
-            onSelect() {
-                if (!this.reticle.visible || !this.arObject) return;
-                
-                // Clone the AR object
+            onSelect(event) {
+                if (this.session) {
+                    const xrView = this.session.renderState.baseLayer.getViewport(this.session.renderState.baseLayer.views[0]);
+                    const inputSource = event.inputSource;
+
+                    if (inputSource && inputSource.pointerOrigin) {
+                        const raycaster = new THREE.Raycaster();
+                        const origin = new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(inputSource.pointerOrigin.transform.matrix));
+                        const direction = new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(inputSource.pointerOrigin.transform.matrix)).negate();
+                        
+                        raycaster.set(origin, direction.normalize());
+
+                        const intersects = raycaster.intersectObjects(this.placedObjects, true);
+
+                        if (intersects.length > 0) {
+                            this.selectObject(intersects[0].object);
+                        } else if (this.reticle.visible && this.arObject) {
+                            this.placeObject();
+                        }
+                    } else if (this.reticle.visible && this.arObject) {
+                        this.placeObject();
+                    }
+                }
+            }
+
+            placeObject() {
                 const clone = this.arObject.clone();
                 clone.position.copy(this.reticle.position);
                 
-                // Add some randomness to rotation
                 clone.rotation.y = Math.random() * Math.PI * 2;
                 
-                // Add to scene and tracking array
                 this.scene.add(clone);
                 this.placedObjects.push(clone);
                 
+                this.selectObject(clone);
                 console.log('Object placed. Total objects:', this.placedObjects.length);
             }
+
+            selectObject(object) {
+                if (this.selectedObject) {
+                    this.deselectObject(this.selectedObject);
+                }
+
+                let topParent = object;
+                while (topParent.parent && topParent.parent !== this.scene) {
+                    topParent = topParent.parent;
+                }
+                
+                this.selectedObject = topParent;
+                document.getElementById('controls-manipulation').style.display = 'flex';
+
+                document.getElementById('scaleSlider').value = this.selectedObject.scale.x;
+                document.getElementById('rotateSlider').value = (this.selectedObject.rotation.y * 180 / Math.PI) % 360;
+                
+                console.log('Object selected:', this.selectedObject);
+            }
+
+            deselectObject(object) {
+                this.selectedObject = null;
+                document.getElementById('controls-manipulation').style.display = 'none';
+                console.log('Object deselected');
+            }
             
+            onScaleChange(value) {
+                if (this.selectedObject) {
+                    const scale = parseFloat(value);
+                    this.selectedObject.scale.set(scale, scale, scale);
+                }
+            }
+
+            onRotateChange(value) {
+                if (this.selectedObject) {
+                    const rotationY = parseFloat(value) * Math.PI / 180;
+                    this.selectedObject.rotation.y = rotationY;
+                }
+            }
+
             resetObjects() {
-                // Remove all placed objects
                 this.placedObjects.forEach(object => {
                     this.scene.remove(object);
                 });
                 this.placedObjects = [];
+                this.selectedObject = null;
+                document.getElementById('controls-manipulation').style.display = 'none';
                 console.log('All objects removed');
             }
             
@@ -473,7 +570,6 @@
             onSessionEnded() {
                 this.cleanup();
                 
-                // Reset UI
                 document.getElementById('ui').style.display = 'block';
                 document.getElementById('instructions').style.display = 'none';
                 document.getElementById('controls').style.display = 'none';
@@ -482,7 +578,6 @@
             }
             
             cleanup() {
-                // Clean up resources
                 if (this.hitTestSource) {
                     this.hitTestSource.cancel();
                     this.hitTestSource = null;
@@ -501,7 +596,6 @@
             }
         }
         
-        // Initialize app when DOM is ready
         document.addEventListener('DOMContentLoaded', () => {
             new ARObjectPlacement();
         });
