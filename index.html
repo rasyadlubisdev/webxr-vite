@@ -150,7 +150,7 @@
     <script src="https://unpkg.com/three@0.126.0/examples/js/loaders/GLTFLoader.js"></script>
 
     <script>
-        // AR Object Placement berdasarkan tutorial resmi Google ARCore WebXR
+        // AR Object Placement dengan texture support yang diperbaiki
         class ARObjectPlacement {
             constructor() {
                 this.canvas = null;
@@ -215,26 +215,50 @@
                     this.reticle = reticleGltf.scene;
                     this.reticle.visible = false;
                     
-                    // Try to load user model, fallback to sunflower
-                    try {
-                        const userGltf = await this.loadGLTF(loader, 'Astronaut.glb');
-                        this.arObject = userGltf.scene;
-                        this.arObject.scale.setScalar(0.3);
-                        statusEl.innerHTML = '✅ Model Astronaut siap!';
-                    } catch (error) {
-                        console.warn('User model not found, using fallback:', error);
-                        const fallbackGltf = await this.loadGLTF(loader, 'https://immersive-web.github.io/webxr-samples/media/gltf/sunflower/sunflower.gltf');
-                        this.arObject = fallbackGltf.scene;
-                        statusEl.innerHTML = '✅ Model default siap!';
-                    }
+                    // Load AR object - GANTI URL INI DENGAN MODEL GLB ANDA
+                    const objectGltf = await this.loadGLTF(loader, 'Astronaut.glb');
+                    this.arObject = objectGltf.scene;
                     
+                    // PERBAIKAN PENTING: Traverse semua materials untuk memastikan texture muncul
+                    this.arObject.traverse((child) => {
+                        if (child.isMesh) {
+                            // Pastikan material menerima cahaya dengan benar
+                            if (child.material) {
+                                // Jika array of materials
+                                if (Array.isArray(child.material)) {
+                                    child.material.forEach(mat => {
+                                        mat.needsUpdate = true;
+                                        // Untuk texture yang benar
+                                        if (mat.map) {
+                                            mat.map.encoding = THREE.sRGBEncoding;
+                                        }
+                                    });
+                                } else {
+                                    child.material.needsUpdate = true;
+                                    // Untuk texture yang benar
+                                    if (child.material.map) {
+                                        child.material.map.encoding = THREE.sRGBEncoding;
+                                    }
+                                }
+                            }
+                            
+                            // Cast shadows jika dibutuhkan
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+                        }
+                    });
+                    
+                    statusEl.innerHTML = '✅ Model berhasil dimuat! Siap memulai AR';
                     startButton.textContent = 'Mulai AR';
                     startButton.disabled = false;
                     
+                    console.log('Models loaded successfully');
+                    console.log('AR Object:', this.arObject);
+                    
                 } catch (error) {
                     console.error('Error loading models:', error);
-                    statusEl.innerHTML = '❌ Gagal memuat model';
-                    startButton.textContent = 'Error Model';
+                    statusEl.innerHTML = '❌ Gagal memuat model: ' + error.message;
+                    startButton.textContent = 'Error Memuat Model';
                 }
             }
             
@@ -259,7 +283,11 @@
                     // Setup canvas and WebGL context
                     this.canvas = document.createElement("canvas");
                     document.body.appendChild(this.canvas);
-                    this.gl = this.canvas.getContext("webgl", {xrCompatible: true});
+                    this.gl = this.canvas.getContext("webgl", {
+                        xrCompatible: true,
+                        alpha: true,
+                        antialias: true  // PERBAIKAN: Tambahkan antialiasing
+                    });
                     
                     if (!this.gl) {
                         throw new Error("WebGL not supported");
@@ -268,26 +296,48 @@
                     // Create scene
                     this.scene = new THREE.Scene();
                     
-                    // Add lighting
-                    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.3);
+                    // PERBAIKAN: Tingkatkan intensitas cahaya untuk texture yang lebih terang
+                    // Directional light lebih terang
+                    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);  // Dinaikkan dari 0.3 ke 1.0
                     directionalLight.position.set(10, 15, 10);
                     this.scene.add(directionalLight);
                     
-                    // Add ambient light
-                    const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
+                    // Tambah cahaya dari arah lain
+                    const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.5);
+                    directionalLight2.position.set(-10, 10, -10);
+                    this.scene.add(directionalLight2);
+                    
+                    // Ambient light lebih terang
+                    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);  // Dinaikkan dari 0.4 ke 0.8
                     this.scene.add(ambientLight);
+                    
+                    // PERBAIKAN: Tambahkan hemisphere light untuk pencahayaan lebih natural
+                    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+                    hemiLight.position.set(0, 20, 0);
+                    this.scene.add(hemiLight);
                     
                     // Add reticle to scene
                     this.scene.add(this.reticle);
                     
-                    // Setup renderer
+                    // PERBAIKAN: Setup renderer dengan konfigurasi yang lebih baik untuk texture
                     this.renderer = new THREE.WebGLRenderer({
                         alpha: true,
                         preserveDrawingBuffer: true,
                         canvas: this.canvas,
-                        context: this.gl
+                        context: this.gl,
+                        antialias: true  // PERBAIKAN: Tambahkan antialiasing
                     });
                     this.renderer.autoClear = false;
+                    
+                    // PERBAIKAN: Set output encoding untuk texture yang benar
+                    this.renderer.outputEncoding = THREE.sRGBEncoding;
+                    
+                    // PERBAIKAN: Enable physically correct lighting
+                    this.renderer.physicallyCorrectLights = true;
+                    
+                    // PERBAIKAN: Set tone mapping untuk exposure yang lebih baik
+                    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                    this.renderer.toneMappingExposure = 1.0;
                     
                     // Setup camera
                     this.camera = new THREE.PerspectiveCamera();
@@ -295,7 +345,9 @@
                     
                     // Request XR session
                     this.session = await navigator.xr.requestSession("immersive-ar", {
-                        requiredFeatures: ['hit-test']
+                        requiredFeatures: ['hit-test'],
+                        optionalFeatures: ['dom-overlay'],
+                        domOverlay: { root: document.getElementById('container') }
                     });
                     
                     // Setup session
