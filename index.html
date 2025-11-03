@@ -243,6 +243,7 @@
                 this.selectedObject = null;
                 this.objectIndex = 0;
                 this.isInteractingWithUI = false;
+                this.lastUIInteraction = 0;
                 
                 this.init();
             }
@@ -347,53 +348,61 @@
                 
                 controlsContainer.addEventListener('touchstart', (e) => {
                     this.isInteractingWithUI = true;
+                    this.lastUIInteraction = Date.now();
                     e.stopPropagation();
                 });
                 controlsContainer.addEventListener('touchend', () => {
-                    setTimeout(() => { this.isInteractingWithUI = false; }, 100);
+                    this.lastUIInteraction = Date.now();
+                    setTimeout(() => { this.isInteractingWithUI = false; }, 500);
+                });
+                controlsContainer.addEventListener('click', (e) => {
+                    this.lastUIInteraction = Date.now();
+                    e.stopPropagation();
                 });
                 
-                resetButton.addEventListener('touchstart', () => {
-                    this.isInteractingWithUI = true;
-                });
                 resetButton.addEventListener('click', () => {
                     this.resetObjects();
-                    setTimeout(() => { this.isInteractingWithUI = false; }, 100);
+                    this.lastUIInteraction = Date.now();
                 });
                 
-                exitButton.addEventListener('touchstart', () => {
-                    this.isInteractingWithUI = true;
-                });
                 exitButton.addEventListener('click', () => {
                     this.exitAR();
-                    setTimeout(() => { this.isInteractingWithUI = false; }, 100);
+                    this.lastUIInteraction = Date.now();
                 });
 
                 scaleSlider.addEventListener('touchstart', () => {
                     this.isInteractingWithUI = true;
+                    this.lastUIInteraction = Date.now();
                 });
                 scaleSlider.addEventListener('touchend', () => {
-                    this.isInteractingWithUI = false;
+                    this.lastUIInteraction = Date.now();
+                    setTimeout(() => { this.isInteractingWithUI = false; }, 500);
                 });
                 scaleSlider.addEventListener('mousedown', () => {
                     this.isInteractingWithUI = true;
+                    this.lastUIInteraction = Date.now();
                 });
                 scaleSlider.addEventListener('mouseup', () => {
-                    this.isInteractingWithUI = false;
+                    this.lastUIInteraction = Date.now();
+                    setTimeout(() => { this.isInteractingWithUI = false; }, 500);
                 });
                 scaleSlider.addEventListener('input', (event) => this.onScaleChange(event.target.value));
 
                 rotateSlider.addEventListener('touchstart', () => {
                     this.isInteractingWithUI = true;
+                    this.lastUIInteraction = Date.now();
                 });
                 rotateSlider.addEventListener('touchend', () => {
-                    this.isInteractingWithUI = false;
+                    this.lastUIInteraction = Date.now();
+                    setTimeout(() => { this.isInteractingWithUI = false; }, 500);
                 });
                 rotateSlider.addEventListener('mousedown', () => {
                     this.isInteractingWithUI = true;
+                    this.lastUIInteraction = Date.now();
                 });
                 rotateSlider.addEventListener('mouseup', () => {
-                    this.isInteractingWithUI = false;
+                    this.lastUIInteraction = Date.now();
+                    setTimeout(() => { this.isInteractingWithUI = false; }, 500);
                 });
                 rotateSlider.addEventListener('input', (event) => this.onRotateChange(event.target.value));
             }
@@ -528,7 +537,10 @@
             }
             
             onSelect(event) {
-                if (this.isInteractingWithUI) {
+                const timeSinceLastUI = Date.now() - this.lastUIInteraction;
+                
+                if (this.isInteractingWithUI || timeSinceLastUI < 500) {
+                    console.log('Ignoring select: UI interaction in progress or too recent');
                     return;
                 }
                 
