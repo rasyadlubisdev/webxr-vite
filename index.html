@@ -102,6 +102,9 @@
             display: none;
             flex-direction: column;
             margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.3);
+            width: 100%;
         }
         
         .control-button {
@@ -118,6 +121,15 @@
         
         .control-button:hover {
             background: rgba(255,255,255,1);
+        }
+
+        .control-button.delete {
+            background: rgba(220, 53, 69, 0.9);
+            color: white;
+        }
+
+        .control-button.delete:hover {
+            background: rgba(220, 53, 69, 1);
         }
 
         .slider-container {
@@ -167,6 +179,19 @@
             background: #007bff;
             cursor: pointer;
         }
+
+        #objectInfo {
+            color: white;
+            font-size: 14px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        #manipulation-buttons {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
+        }
         
         canvas {
             display: block;
@@ -200,15 +225,17 @@
         </div>
         
         <div id="instructions">
-            Arahkan kamera ke permukaan datar, lalu ketuk layar untuk menempatkan objek
+            Arahkan kamera ke permukaan datar, lalu ketuk layar untuk menempatkan objek.<br>
+            Ketuk objek untuk memilih dan memanipulasi.
         </div>
         
         <div id="controls">
             <div id="controls-main">
-                <button class="control-button" id="resetButton">Reset Objek</button>
+                <button class="control-button" id="resetButton">Reset Semua</button>
                 <button class="control-button" id="exitButton">Keluar AR</button>
             </div>
             <div id="controls-manipulation">
+                <div id="objectInfo">Objek dipilih: <span id="selectedObjectId">-</span></div>
                 <div class="slider-container">
                     <label for="scaleSlider">Skala:</label>
                     <input type="range" id="scaleSlider" min="0.1" max="5" value="1" step="0.1">
@@ -216,6 +243,10 @@
                 <div class="slider-container">
                     <label for="rotateSlider">Rotasi Y:</label>
                     <input type="range" id="rotateSlider" min="0" max="360" value="0" step="5">
+                </div>
+                <div id="manipulation-buttons">
+                    <button class="control-button delete" id="deleteButton">Hapus Objek</button>
+                    <button class="control-button" id="deselectButton">Batal Pilih</button>
                 </div>
             </div>
         </div>
@@ -245,6 +276,10 @@
                 this.isInteractingWithUI = false;
                 this.lastUIInteraction = 0;
                 
+                // For object selection
+                this.raycaster = new THREE.Raycaster();
+                this.highlightBox = null;
+                
                 this.init();
             }
             
@@ -252,6 +287,21 @@
                 await this.checkWebXRSupport();
                 this.setupEventListeners();
                 await this.loadModels();
+                this.createSelectionHighlight();
+            }
+
+            createSelectionHighlight() {
+                // Create a wireframe box for highlighting selected objects
+                const geometry = new THREE.BoxGeometry(1, 1, 1);
+                const edges = new THREE.EdgesGeometry(geometry);
+                const material = new THREE.LineBasicMaterial({ 
+                    color: 0x00ff00, 
+                    linewidth: 2,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                this.highlightBox = new THREE.LineSegments(edges, material);
+                this.highlightBox.visible = false;
             }
             
             async checkWebXRSupport() {
@@ -340,12 +390,15 @@
                 const startButton = document.getElementById('startButton');
                 const resetButton = document.getElementById('resetButton');
                 const exitButton = document.getElementById('exitButton');
+                const deleteButton = document.getElementById('deleteButton');
+                const deselectButton = document.getElementById('deselectButton');
                 const scaleSlider = document.getElementById('scaleSlider');
                 const rotateSlider = document.getElementById('rotateSlider');
                 const controlsContainer = document.getElementById('controls');
                 
                 startButton.addEventListener('click', () => this.startAR());
                 
+                // Controls container events
                 controlsContainer.addEventListener('touchstart', (e) => {
                     this.isInteractingWithUI = true;
                     this.lastUIInteraction = Date.now();
@@ -360,6 +413,7 @@
                     e.stopPropagation();
                 });
                 
+                // Button events
                 resetButton.addEventListener('click', () => {
                     this.resetObjects();
                     this.lastUIInteraction = Date.now();
@@ -370,6 +424,17 @@
                     this.lastUIInteraction = Date.now();
                 });
 
+                deleteButton.addEventListener('click', () => {
+                    this.deleteSelectedObject();
+                    this.lastUIInteraction = Date.now();
+                });
+
+                deselectButton.addEventListener('click', () => {
+                    this.deselectObject();
+                    this.lastUIInteraction = Date.now();
+                });
+
+                // Slider events
                 scaleSlider.addEventListener('touchstart', () => {
                     this.isInteractingWithUI = true;
                     this.lastUIInteraction = Date.now();
@@ -439,6 +504,7 @@
                     this.scene.add(hemiLight);
                     
                     this.scene.add(this.reticle);
+                    this.scene.add(this.highlightBox);
                     
                     this.renderer = new THREE.WebGLRenderer({
                         alpha: true,
@@ -543,7 +609,52 @@
                     console.log('Ignoring select: UI interaction in progress or too recent');
                     return;
                 }
+
+                // Try to select an existing object first
+                const frame = event.frame;
+                const inputSource = event.inputSource;
                 
+                if (inputSource && frame) {
+                    const pose = frame.getPose(inputSource.targetRaySpace, this.referenceSpace);
+                    
+                    if (pose) {
+                        // Create ray from input source
+                        const origin = new THREE.Vector3(
+                            pose.transform.position.x,
+                            pose.transform.position.y,
+                            pose.transform.position.z
+                        );
+                        
+                        const direction = new THREE.Vector3(0, 0, -1);
+                        direction.applyQuaternion(new THREE.Quaternion(
+                            pose.transform.orientation.x,
+                            pose.transform.orientation.y,
+                            pose.transform.orientation.z,
+                            pose.transform.orientation.w
+                        ));
+                        
+                        this.raycaster.set(origin, direction);
+                        
+                        // Check for intersections with placed objects
+                        const intersects = this.raycaster.intersectObjects(this.placedObjects, true);
+                        
+                        if (intersects.length > 0) {
+                            // Find the parent object (not the mesh children)
+                            let selectedObj = intersects[0].object;
+                            while (selectedObj.parent && !this.placedObjects.includes(selectedObj)) {
+                                selectedObj = selectedObj.parent;
+                            }
+                            
+                            if (this.placedObjects.includes(selectedObj)) {
+                                this.selectObject(selectedObj);
+                                console.log('Object selected via raycast');
+                                return;
+                            }
+                        }
+                    }
+                }
+                
+                // If no object was selected, place a new one
                 if (this.reticle.visible && this.arObject) {
                     this.placeObject();
                 }
@@ -568,19 +679,76 @@
             selectObject(object) {
                 this.selectedObject = object;
                 
+                // Update highlight box
+                this.updateHighlightBox();
+                
+                // Show manipulation controls
                 const manipulationControls = document.getElementById('controls-manipulation');
                 manipulationControls.style.display = 'flex';
 
+                // Update UI
+                document.getElementById('selectedObjectId').textContent = '#' + this.selectedObject.userData.objectId;
                 document.getElementById('scaleSlider').value = this.selectedObject.scale.x;
                 document.getElementById('rotateSlider').value = (this.selectedObject.rotation.y * 180 / Math.PI) % 360;
                 
                 console.log('Object selected:', this.selectedObject.userData.objectId);
+            }
+
+            updateHighlightBox() {
+                if (!this.selectedObject || !this.highlightBox) return;
+
+                // Calculate bounding box of the selected object
+                const box = new THREE.Box3().setFromObject(this.selectedObject);
+                const size = new THREE.Vector3();
+                const center = new THREE.Vector3();
+                
+                box.getSize(size);
+                box.getCenter(center);
+
+                // Update highlight box
+                this.highlightBox.scale.copy(size);
+                this.highlightBox.position.copy(center);
+                this.highlightBox.visible = true;
+            }
+
+            deselectObject() {
+                this.selectedObject = null;
+                this.highlightBox.visible = false;
+                
+                const manipulationControls = document.getElementById('controls-manipulation');
+                manipulationControls.style.display = 'none';
+                
+                console.log('Object deselected');
+            }
+
+            deleteSelectedObject() {
+                if (!this.selectedObject) {
+                    console.log('No object selected to delete');
+                    return;
+                }
+
+                const objectId = this.selectedObject.userData.objectId;
+                
+                // Remove from scene
+                this.scene.remove(this.selectedObject);
+                
+                // Remove from placed objects array
+                const index = this.placedObjects.indexOf(this.selectedObject);
+                if (index > -1) {
+                    this.placedObjects.splice(index, 1);
+                }
+                
+                console.log('Object deleted:', objectId, 'Remaining objects:', this.placedObjects.length);
+                
+                // Deselect
+                this.deselectObject();
             }
             
             onScaleChange(value) {
                 if (this.selectedObject) {
                     const scale = parseFloat(value);
                     this.selectedObject.scale.set(scale, scale, scale);
+                    this.updateHighlightBox();
                 }
             }
 
@@ -588,6 +756,7 @@
                 if (this.selectedObject) {
                     const rotationY = parseFloat(value) * Math.PI / 180;
                     this.selectedObject.rotation.y = rotationY;
+                    this.updateHighlightBox();
                 }
             }
 
@@ -596,9 +765,8 @@
                     this.scene.remove(object);
                 });
                 this.placedObjects = [];
-                this.selectedObject = null;
+                this.deselectObject();
                 this.objectIndex = 0;
-                document.getElementById('controls-manipulation').style.display = 'none';
                 console.log('All objects removed');
             }
             
