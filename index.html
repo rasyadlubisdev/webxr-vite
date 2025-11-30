@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Nano Banana - State Mode</title>
+    <title>AR Nano Banana - Pinch Resize</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
     
     <style>
         :root {
             --glass-bg: rgba(20, 20, 20, 0.85);
             --glass-border: 1px solid rgba(255, 255, 255, 0.15);
-            --accent: #2ecc71; /* Hijau */
-            --active: #f1c40f; /* Kuning untuk mode aktif */
-            --danger: #e74c3c; /* Merah */
+            --accent: #2ecc71;
+            --active: #f1c40f;
+            --danger: #e74c3c;
         }
 
         body {
@@ -24,17 +24,14 @@
             user-select: none;
         }
 
-        /* Container UI (Pointer Events None agar tembus ke canvas) */
         #overlay-container {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none; z-index: 100;
             display: flex; flex-direction: column; justify-content: space-between;
         }
 
-        /* Class untuk elemen yang BISA diklik */
         .interactive { pointer-events: auto !important; }
 
-        /* Start Screen */
         #start-screen {
             position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
@@ -52,7 +49,6 @@
             color: white; font-weight: bold; font-size: 16px;
         }
 
-        /* HUD Styles */
         .icon-btn {
             width: 44px; height: 44px; border-radius: 50%;
             background: rgba(50,50,50,0.8); border: var(--glass-border);
@@ -69,16 +65,14 @@
             display: flex; flex-direction: column; align-items: center; gap: 10px;
         }
 
-        /* Toast Message */
         #toast {
             background: rgba(0,0,0,0.7); color: white;
             padding: 8px 16px; border-radius: 20px; font-size: 13px;
             margin-bottom: 10px; text-align: center;
         }
 
-        /* Action Bar (Menu Bawah) */
         #action-bar {
-            display: none; /* Hidden by default */
+            display: none;
             flex-wrap: wrap; justify-content: center; gap: 10px;
             background: var(--glass-bg);
             padding: 12px 20px; border-radius: 24px;
@@ -97,12 +91,10 @@
         }
         .pill-btn:active { transform: scale(0.95); }
         
-        /* State Colors */
         .btn-mode-active { background: var(--active) !important; color: #000 !important; box-shadow: 0 0 10px var(--active); }
         .btn-delete { background: rgba(231, 76, 60, 0.2); color: #ff8787; border: 1px solid rgba(231, 76, 60, 0.5); }
         .btn-fpv { background: rgba(46, 204, 113, 0.2); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.5); }
 
-        /* FPV UI */
         #fpv-ui {
             display: none; position: absolute; top:0; left:0; width:100%; height:100%;
             pointer-events: none; z-index: 150;
@@ -126,12 +118,9 @@
             <button id="btn-reset" class="icon-btn interactive">↺</button>
             <button id="btn-exit" class="icon-btn red interactive">✕</button>
         </div>
-
         <div style="flex:1"></div>
-
         <div id="hud-bottom">
             <div id="toast">Arahkan ke lantai & ketuk untuk menempatkan</div>
-            
             <div id="action-bar" class="interactive">
                 <button id="btn-scale" class="pill-btn">📏 Ukuran</button>
                 <button id="btn-rotate" class="pill-btn">🔄 Putar</button>
@@ -167,30 +156,24 @@
                 this.selectedObject = null;
                 this.reticle = null;
                 this.session = null;
-                
-                // --- STATE MANAGEMENT ---
-                // Modes: 'IDLE', 'SELECTED', 'MODE_SCALE', 'MODE_ROTATE', 'FPV'
                 this.appState = 'IDLE'; 
-                
-                // Helper untuk mencegah "Delete Bug" (interaction lock)
                 this.isUIInteraction = false; 
 
-                // Movement Logic
-                this.touchStartY = 0;
+                // Gestures Variables
                 this.touchStartX = 0;
-                this.initialValue = 0; // Stores scale or rotation at start of drag
+                this.initialValue = 0; // For Rotate (1 finger)
+                this.startDist = 0;    // For Pinch (2 fingers)
+                this.startScale = 1;
 
                 this.initUI();
                 this.checkXR();
             }
 
             initUI() {
-                // Main
                 document.getElementById('btn-start').onclick = () => this.startAR();
                 document.getElementById('btn-exit').onclick = () => this.endAR();
                 document.getElementById('btn-reset').onclick = () => this.resetScene();
 
-                // Context Menu
                 this.bindButton('btn-scale', () => this.toggleMode('MODE_SCALE'));
                 this.bindButton('btn-rotate', () => this.toggleMode('MODE_ROTATE'));
                 this.bindButton('btn-delete', () => this.deleteObject());
@@ -198,7 +181,6 @@
                 this.bindButton('btn-fpv', () => this.enterFPV());
                 document.getElementById('btn-exit-fpv').onclick = () => this.exitFPV();
 
-                // Elevation (FPV)
                 const setupHold = (id, val) => {
                     const btn = document.getElementById(id);
                     const start = (e) => { e.preventDefault(); this.verticalSpeed = val; };
@@ -209,76 +191,71 @@
                 setupHold('btn-up', 0.02);
                 setupHold('btn-down', -0.02);
 
-                // UI Interaction Blockers (CRITICAL FIX FOR DELETE BUG)
                 const uiElements = document.querySelectorAll('.interactive');
                 uiElements.forEach(el => {
                     el.addEventListener('touchstart', () => { this.isUIInteraction = true; });
-                    el.addEventListener('touchend', () => { 
-                        // Delay release to ensure click doesn't pass through
-                        setTimeout(() => { this.isUIInteraction = false; }, 200); 
-                    });
-                    el.addEventListener('click', (e) => {
-                        e.stopPropagation(); // Stop DOM propagation
-                        this.isUIInteraction = true;
-                        setTimeout(() => { this.isUIInteraction = false; }, 200);
-                    });
+                    el.addEventListener('touchend', () => { setTimeout(() => { this.isUIInteraction = false; }, 200); });
+                    el.addEventListener('click', (e) => { e.stopPropagation(); this.isUIInteraction = true; setTimeout(() => { this.isUIInteraction = false; }, 200); });
                 });
 
-                // Global Touch for Manipulation (1 Finger Drag)
                 window.addEventListener('touchstart', (e) => this.onTouchStart(e), {passive: false});
                 window.addEventListener('touchmove', (e) => this.onTouchMove(e), {passive: false});
             }
 
             bindButton(id, callback) {
                 const btn = document.getElementById(id);
-                btn.onclick = (e) => {
-                    e.stopPropagation(); // Stop event bubbling
-                    callback();
-                };
+                btn.onclick = (e) => { e.stopPropagation(); callback(); };
             }
 
-            // --- MANIPULATION LOGIC (1 FINGER) ---
+            // --- GESTURE LOGIC UPDATED ---
             onTouchStart(e) {
-                if (e.touches.length === 1 && this.selectedObject) {
-                    this.touchStartY = e.touches[0].pageY;
-                    this.touchStartX = e.touches[0].pageX;
+                if (!this.selectedObject) return;
 
-                    if (this.appState === 'MODE_SCALE') {
-                        this.initialValue = this.selectedObject.scale.x;
-                    } else if (this.appState === 'MODE_ROTATE') {
-                        this.initialValue = this.selectedObject.rotation.y;
-                    }
+                // Mode Scale: 2 Fingers (Pinch)
+                if (this.appState === 'MODE_SCALE' && e.touches.length === 2) {
+                    const dx = e.touches[0].pageX - e.touches[1].pageX;
+                    const dy = e.touches[0].pageY - e.touches[1].pageY;
+                    this.startDist = Math.hypot(dx, dy);
+                    this.startScale = this.selectedObject.scale.x;
+                }
+                
+                // Mode Rotate: 1 Finger (Swipe)
+                if (this.appState === 'MODE_ROTATE' && e.touches.length === 1) {
+                    this.touchStartX = e.touches[0].pageX;
+                    this.initialValue = this.selectedObject.rotation.y;
                 }
             }
 
             onTouchMove(e) {
-                // Only act if we are in a specific manipulation mode
-                if (e.touches.length === 1 && this.selectedObject) {
-                    const dy = e.touches[0].pageY - this.touchStartY;
-                    const dx = e.touches[0].pageX - this.touchStartX;
+                if (!this.selectedObject) return;
 
-                    if (this.appState === 'MODE_SCALE') {
-                        e.preventDefault(); // Stop scroll
-                        // Drag Up = Bigger, Down = Smaller
-                        const sensitivity = 0.01;
-                        let newScale = this.initialValue - (dy * sensitivity);
-                        newScale = Math.max(0.1, Math.min(newScale, 5.0)); // Clamp
+                // PINCH RESIZE (2 Fingers)
+                if (this.appState === 'MODE_SCALE' && e.touches.length === 2) {
+                    e.preventDefault(); 
+                    const dx = e.touches[0].pageX - e.touches[1].pageX;
+                    const dy = e.touches[0].pageY - e.touches[1].pageY;
+                    const currDist = Math.hypot(dx, dy);
+                    
+                    if (this.startDist > 0) {
+                        const scaleFactor = currDist / this.startDist;
+                        let newScale = this.startScale * scaleFactor;
+                        newScale = Math.max(0.1, Math.min(newScale, 5.0));
                         this.selectedObject.scale.set(newScale, newScale, newScale);
-                        this.updateBox();
-                    } 
-                    else if (this.appState === 'MODE_ROTATE') {
-                        e.preventDefault();
-                        // Drag Left/Right to rotate
-                        const sensitivity = 0.01;
-                        this.selectedObject.rotation.y = this.initialValue + (dx * sensitivity);
                         this.updateBox();
                     }
                 }
+
+                // SWIPE ROTATE (1 Finger)
+                else if (this.appState === 'MODE_ROTATE' && e.touches.length === 1) {
+                    e.preventDefault();
+                    const dx = e.touches[0].pageX - this.touchStartX;
+                    const sensitivity = 0.01;
+                    this.selectedObject.rotation.y = this.initialValue + (dx * sensitivity);
+                    this.updateBox();
+                }
             }
 
-            // --- MODE SWITCHING ---
             toggleMode(targetMode) {
-                // If clicking same mode, turn it off (back to SELECTED)
                 if (this.appState === targetMode) {
                     this.setMode('SELECTED');
                 } else {
@@ -288,22 +265,19 @@
 
             setMode(mode) {
                 this.appState = mode;
-                
-                // UI Visuals
                 const btnScale = document.getElementById('btn-scale');
                 const btnRotate = document.getElementById('btn-rotate');
                 const toast = document.getElementById('toast');
 
-                // Reset colors
                 btnScale.classList.remove('btn-mode-active');
                 btnRotate.classList.remove('btn-mode-active');
 
                 if (mode === 'MODE_SCALE') {
                     btnScale.classList.add('btn-mode-active');
-                    toast.innerText = "Geser 1 jari NAIK/TURUN untuk ubah ukuran";
+                    toast.innerText = "Cubit layar dengan 2 jari untuk Resize";
                 } else if (mode === 'MODE_ROTATE') {
                     btnRotate.classList.add('btn-mode-active');
-                    toast.innerText = "Geser 1 jari KIRI/KANAN untuk memutar";
+                    toast.innerText = "Geser 1 jari Kiri/Kanan untuk Memutar";
                 } else if (mode === 'SELECTED') {
                     toast.innerText = "Pilih mode di bawah";
                 } else if (mode === 'IDLE') {
@@ -312,7 +286,6 @@
                 }
             }
 
-            // --- CORE AR FUNCTIONS ---
             async checkXR() {
                 if (navigator.xr && await navigator.xr.isSessionSupported('immersive-ar')) {
                     document.getElementById('status-text').innerText = "Siap.";
@@ -346,7 +319,6 @@
                 this.camera = new THREE.PerspectiveCamera();
                 this.camera.matrixAutoUpdate = false;
 
-                // Load Assets
                 const loader = new THREE.GLTFLoader();
                 loader.load('https://immersive-web.github.io/webxr-samples/media/gltf/reticle/reticle.gltf', (gltf) => {
                     this.reticle = gltf.scene;
@@ -358,9 +330,8 @@
                     this.modelTemplate = gltf.scene;
                 });
 
-                // Selection Box
                 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
-                const boxMat = new THREE.LineBasicMaterial({ color: 0xffff00 }); // Yellow highlight
+                const boxMat = new THREE.LineBasicMaterial({ color: 0xffff00 });
                 this.highlight = new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), boxMat);
                 this.highlight.visible = false;
                 this.scene.add(this.highlight);
@@ -377,43 +348,31 @@
             }
 
             onSelect(event) {
-                // 1. CRITICAL: If interacting with UI (Button clicks), IGNORE completely.
-                if (this.isUIInteraction) {
-                    console.log("UI Blocked AR Touch");
-                    return;
-                }
-
-                // 2. If in Manipulation Mode (Scale/Rotate), Select is ignored (prevents accidental placement)
-                if (this.appState === 'MODE_SCALE' || this.appState === 'MODE_ROTATE' || this.appState === 'FPV') {
-                    return;
-                }
+                if (this.isUIInteraction) return;
+                if (this.appState === 'MODE_SCALE' || this.appState === 'MODE_ROTATE' || this.appState === 'FPV') return;
 
                 const frame = event.frame;
                 const inputSource = event.inputSource;
 
-                // 3. Raycast to SELECT Object
                 if (inputSource.targetRaySpace) {
                     const pose = frame.getPose(inputSource.targetRaySpace, this.refSpace);
                     if (pose) {
                         const origin = new THREE.Vector3(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
                         const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(new THREE.Quaternion(pose.transform.orientation.x, pose.transform.orientation.y, pose.transform.orientation.z, pose.transform.orientation.w));
-                        
                         const raycaster = new THREE.Raycaster(origin, direction);
                         const intersects = raycaster.intersectObjects(this.placedObjects, true);
 
                         if (intersects.length > 0) {
                             let obj = intersects[0].object;
                             while(obj.parent && !this.placedObjects.includes(obj)) obj = obj.parent;
-                            
                             if (this.placedObjects.includes(obj)) {
                                 this.selectObject(obj);
-                                return; // Stop here
+                                return;
                             }
                         }
                     }
                 }
 
-                // 4. Place Object (Only if not selecting existing one)
                 if (this.reticle && this.reticle.visible && this.modelTemplate && !this.selectedObject) {
                     const clone = this.modelTemplate.clone();
                     clone.position.copy(this.reticle.position);
@@ -421,7 +380,6 @@
                     this.placedObjects.push(clone);
                     this.selectObject(clone);
                 } else if (this.selectedObject) {
-                    // Tap empty space to Deselect
                     this.deselect();
                 }
             }
@@ -429,8 +387,6 @@
             selectObject(obj) {
                 this.selectedObject = obj;
                 this.updateBox();
-                
-                // Show Menu
                 document.getElementById('action-bar').style.display = 'flex';
                 this.setMode('SELECTED');
             }
@@ -445,14 +401,8 @@
             deleteObject() {
                 if (this.selectedObject) {
                     this.scene.remove(this.selectedObject);
-                    // Remove from array correctly
                     this.placedObjects = this.placedObjects.filter(o => o !== this.selectedObject);
-                    
-                    this.selectedObject = null;
-                    this.highlight.visible = false;
-                    document.getElementById('action-bar').style.display = 'none';
-                    this.setMode('IDLE');
-                    
+                    this.deselect();
                     document.getElementById('toast').innerText = "Objek dihapus";
                 }
             }
@@ -468,17 +418,11 @@
                 this.highlight.visible = true;
             }
 
-            // --- FPV Logic ---
             enterFPV() {
                 if(!this.selectedObject) return;
                 this.setMode('FPV');
                 this.fpvObject = this.selectedObject;
-                
-                this.savedT = { 
-                    s: this.fpvObject.scale.clone(), 
-                    p: this.fpvObject.position.clone(), 
-                    r: this.fpvObject.rotation.clone() 
-                };
+                this.savedT = { s: this.fpvObject.scale.clone(), p: this.fpvObject.position.clone(), r: this.fpvObject.rotation.clone() };
                 const big = this.savedT.s.x * 20; 
                 this.fpvObject.scale.set(big, big, big);
 
@@ -511,7 +455,6 @@
             render(t, frame) {
                 this.session.requestAnimationFrame((t, f) => this.render(t, f));
                 const pose = frame.getViewerPose(this.refSpace);
-
                 if (pose) {
                     if (this.appState !== 'FPV' && this.hitTestSource) {
                         const res = frame.getHitTestResults(this.hitTestSource);
@@ -522,13 +465,11 @@
                             this.reticle.updateMatrixWorld(true);
                         } else this.reticle.visible = false;
                     }
-
                     if (this.appState === 'FPV' && this.fpvObject) {
                         const view = pose.views[0];
                         const mat = new THREE.Matrix4().fromArray(view.transform.matrix);
                         const fwd = new THREE.Vector3(0,0,-1).applyMatrix4(mat); fwd.y=0; fwd.normalize();
                         const right = new THREE.Vector3(1,0,0).applyMatrix4(mat); right.y=0; right.normalize();
-                        
                         const spd = 0.05;
                         const move = new THREE.Vector3();
                         if(Math.abs(this.moveVec.z)>0.1) move.add(fwd.multiplyScalar(this.moveVec.z * spd));
@@ -536,11 +477,9 @@
                         move.y += this.verticalSpeed || 0;
                         this.fpvObject.position.add(move);
                     }
-
                     const gl = this.renderer.getContext();
                     gl.bindFramebuffer(gl.FRAMEBUFFER, this.session.renderState.baseLayer.framebuffer);
                     this.renderer.clear();
-                    
                     for (const view of pose.views) {
                         const vp = this.session.renderState.baseLayer.getViewport(view);
                         this.renderer.setSize(vp.width, vp.height);
@@ -557,7 +496,6 @@
                 this.placedObjects = [];
                 this.deselect();
             }
-            
             endAR() {
                 this.session.end();
                 document.getElementById('start-screen').style.display = 'block';
