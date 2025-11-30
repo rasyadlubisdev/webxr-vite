@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Nano Banana - Seamless Gesture</title>
+    <title>ARCHI AR</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
     
     <style>
@@ -11,16 +11,13 @@
             --glass-bg: rgba(20, 20, 20, 0.85);
             --glass-border: 1px solid rgba(255, 255, 255, 0.15);
             --accent: #2ecc71;
-            --danger: #e74c3c;
+            --active-item: rgba(46, 204, 113, 0.3);
         }
 
         body {
-            margin: 0;
-            overflow: hidden;
-            background-color: #111;
+            margin: 0; overflow: hidden; background-color: #111;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            -webkit-user-select: none;
-            user-select: none;
+            -webkit-user-select: none; user-select: none;
         }
 
         #overlay-container {
@@ -35,85 +32,104 @@
         #start-screen {
             position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(30,30,30,0.9);
-            padding: 30px; border-radius: 20px;
-            text-align: center; color: white;
-            border: var(--glass-border);
-            pointer-events: auto; z-index: 200;
-            width: 80%; max-width: 300px;
+            background: rgba(30,30,30,0.9); padding: 30px; border-radius: 20px;
+            text-align: center; color: white; border: var(--glass-border);
+            pointer-events: auto; z-index: 200; width: 80%; max-width: 300px;
         }
-
         #btn-start {
-            margin-top: 20px; padding: 12px 30px;
-            background: var(--accent); border: none; border-radius: 50px;
-            color: white; font-weight: bold; font-size: 16px;
+            margin-top: 20px; padding: 12px 30px; background: var(--accent);
+            border: none; border-radius: 50px; color: white; font-weight: bold;
         }
 
-        /* Top HUD */
+        /* HUD Buttons */
         .icon-btn {
             width: 44px; height: 44px; border-radius: 50%;
             background: rgba(50,50,50,0.8); border: var(--glass-border);
-            color: white; font-size: 18px;
-            display: flex; align-items: center; justify-content: center;
+            color: white; font-size: 18px; display: flex; align-items: center; justify-content: center;
             backdrop-filter: blur(10px); margin-left: 10px;
         }
         .red { color: #ff6b6b; background: rgba(80,0,0,0.6); }
 
         #hud-top { padding: 20px; display: flex; justify-content: flex-end; }
-        
-        #hud-bottom {
-            padding: 20px; padding-bottom: 40px;
-            display: flex; flex-direction: column; align-items: center; gap: 10px;
-        }
+        #hud-bottom { padding: 20px; padding-bottom: 40px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 
-        /* Toast Info */
         #toast {
-            background: rgba(0,0,0,0.6); color: white;
-            padding: 8px 16px; border-radius: 20px; font-size: 13px;
-            margin-bottom: 10px; text-align: center;
+            background: rgba(0,0,0,0.6); color: white; padding: 8px 16px;
+            border-radius: 20px; font-size: 13px; margin-bottom: 10px; text-align: center;
             backdrop-filter: blur(4px);
-            transition: all 0.3s;
         }
 
-        /* Action Bar (Simplified) */
+        /* MENU UTAMA (Idle State) */
+        #idle-menu {
+            display: flex; gap: 10px; pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        .btn-main {
+            padding: 12px 24px; border-radius: 25px; border: var(--glass-border);
+            background: var(--glass-bg); color: white; font-weight: 600;
+            backdrop-filter: blur(12px); display: flex; align-items: center; gap: 8px;
+        }
+        .btn-main:active { transform: scale(0.95); }
+
+        /* LIBRARY DRAWER */
+        #library-drawer {
+            position: absolute; bottom: 0; left: 0; width: 100%;
+            background: rgba(20,20,20,0.95);
+            border-top: var(--glass-border);
+            border-radius: 20px 20px 0 0;
+            padding: 20px; box-sizing: border-box;
+            transform: translateY(110%); /* Hidden by default */
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: auto; z-index: 150;
+            display: flex; flex-direction: column; gap: 15px;
+        }
+        #library-drawer.open { transform: translateY(0); }
+        
+        .drawer-header { display: flex; justify-content: space-between; align-items: center; color: white; }
+        .drawer-header h3 { margin: 0; font-size: 16px; }
+
+        .model-list {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px;
+            max-height: 200px; overflow-y: auto;
+        }
+
+        .model-card {
+            background: rgba(255,255,255,0.05); border-radius: 12px;
+            padding: 10px; text-align: center; cursor: pointer;
+            border: 1px solid transparent; transition: all 0.2s;
+        }
+        .model-card.active { border-color: var(--accent); background: var(--active-item); }
+        .model-icon { font-size: 24px; margin-bottom: 5px; display: block; }
+        .model-name { font-size: 11px; color: #ccc; }
+
+        /* Action Bar (Selected State) */
         #action-bar {
-            display: none; /* Hidden default */
-            flex-wrap: wrap; justify-content: center; gap: 10px;
-            background: var(--glass-bg);
-            padding: 12px 20px; border-radius: 24px;
-            border: var(--glass-border);
-            backdrop-filter: blur(12px);
-            animation: slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: none; flex-wrap: wrap; justify-content: center; gap: 10px;
+            background: var(--glass-bg); padding: 12px 20px; border-radius: 24px;
+            border: var(--glass-border); backdrop-filter: blur(12px);
+            animation: slideUp 0.3s;
         }
         @keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
         .pill-btn {
             padding: 10px 18px; border-radius: 20px; border: none;
-            font-weight: 600; font-size: 13px;
-            display: flex; align-items: center; gap: 6px;
+            font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px;
             background: rgba(255,255,255,0.1); color: white;
-            transition: all 0.2s;
         }
-        .pill-btn:active { transform: scale(0.95); }
-        
         .btn-delete { background: rgba(231, 76, 60, 0.2); color: #ff8787; border: 1px solid rgba(231, 76, 60, 0.5); }
         .btn-fpv { background: rgba(46, 204, 113, 0.2); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.5); }
 
         /* FPV UI */
-        #fpv-ui {
-            display: none; position: absolute; top:0; left:0; width:100%; height:100%;
-            pointer-events: none; z-index: 150;
-        }
+        #fpv-ui { display: none; position: absolute; top:0; left:0; width:100%; height:100%; pointer-events: none; z-index: 150; }
         #joystick-zone { position: absolute; bottom: 40px; left: 40px; width: 120px; height: 120px; pointer-events: auto; }
         #elevation-controls { position: absolute; bottom: 50px; right: 30px; display: flex; flex-direction: column; gap: 15px; pointer-events: auto; }
         .circle-big { width: 60px; height: 60px; font-size: 24px; background: rgba(255,255,255,0.1); }
-
     </style>
 </head>
 <body>
 
     <div id="start-screen">
-        <h2>Nano Banana AR</h2>
+        <h2>AR Library</h2>
         <p id="status-text">Memuat sistem...</p>
         <button id="btn-start" class="interactive" disabled>Mulai AR</button>
     </div>
@@ -123,12 +139,15 @@
             <button id="btn-reset" class="icon-btn interactive">↺</button>
             <button id="btn-exit" class="icon-btn red interactive">✕</button>
         </div>
-
         <div style="flex:1"></div>
-
+        
         <div id="hud-bottom">
-            <div id="toast">Arahkan ke lantai & ketuk untuk menempatkan</div>
+            <div id="toast">Pilih model dari Library & ketuk lantai</div>
             
+            <div id="idle-menu">
+                <button id="btn-library" class="btn-main interactive">📂 Library 3D</button>
+            </div>
+
             <div id="action-bar" class="interactive">
                 <button id="btn-fpv" class="pill-btn btn-fpv">🚶 FPV</button>
                 <div style="width:1px; height:20px; background:rgba(255,255,255,0.2); margin: 0 5px;"></div>
@@ -136,6 +155,15 @@
                 <button id="btn-delete" class="pill-btn btn-delete">Hapus</button>
             </div>
         </div>
+    </div>
+
+    <div id="library-drawer">
+        <div class="drawer-header">
+            <h3>Pilih Aset 3D</h3>
+            <button id="btn-close-lib" class="icon-btn" style="width:30px; height:30px; font-size:14px;">✕</button>
+        </div>
+        <div class="model-list" id="model-list-container">
+            </div>
     </div>
 
     <div id="fpv-ui">
@@ -156,24 +184,35 @@
     <script src="https://unpkg.com/three@0.126.0/examples/js/loaders/GLTFLoader.js"></script>
 
     <script>
+        // --- DATA LIBRARY ---
+        // Tambahkan model Anda di sini
+        const ASSETS = [
+            { id: 1, name: "Tower House", file: "3d_assets/tower_house_design.glb", icon: "🏠" },
+            { id: 2, name: "Astronaut", file: "3d_assets/Astronaut.glb", icon: "🧑‍🚀" }, // Pastikan file ini ada
+            // { id: 3, name: "Pohon", file: "3d_assets/tree.glb", icon: "🌳" } // Contoh
+        ];
+
         class ARApp {
             constructor() {
                 this.placedObjects = [];
                 this.selectedObject = null;
                 this.reticle = null;
-                this.session = null;
+                this.modelTemplate = null;
+                this.currentModelUrl = ASSETS[0].file; // Default load object pertama
+                this.activeAssetId = ASSETS[0].id;
                 
                 this.fpvMode = false;
                 this.isUIInteraction = false;
-                this.isDragging = false; // Flag to distinguish Swipe vs Tap
-
-                // Gesture Tracking Vars
+                this.isDragging = false;
+                
+                // Gestures
                 this.touchStartX = 0;
                 this.initialRotation = 0;
                 this.startDist = 0;
                 this.startScale = 1;
 
                 this.initUI();
+                this.renderLibrary();
                 this.checkXR();
             }
 
@@ -182,13 +221,23 @@
                 document.getElementById('btn-exit').onclick = () => this.endAR();
                 document.getElementById('btn-reset').onclick = () => this.resetScene();
 
-                // Removed Bindings for Scale/Rotate buttons (They are gone!)
+                // Library Interactions
+                document.getElementById('btn-library').onclick = (e) => {
+                    e.stopPropagation();
+                    document.getElementById('library-drawer').classList.add('open');
+                    this.isUIInteraction = true;
+                };
+                document.getElementById('btn-close-lib').onclick = (e) => {
+                    e.stopPropagation();
+                    document.getElementById('library-drawer').classList.remove('open');
+                };
+
+                // Action Buttons
                 this.bindButton('btn-delete', () => this.deleteObject());
                 this.bindButton('btn-deselect', () => this.deselect());
                 this.bindButton('btn-fpv', () => this.enterFPV());
                 document.getElementById('btn-exit-fpv').onclick = () => this.exitFPV();
 
-                // Elevation Hold
                 const setupHold = (id, val) => {
                     const btn = document.getElementById(id);
                     const start = (e) => { e.preventDefault(); this.verticalSpeed = val; };
@@ -199,15 +248,13 @@
                 setupHold('btn-up', 0.02);
                 setupHold('btn-down', -0.02);
 
-                // UI Blockers
-                const uiElements = document.querySelectorAll('.interactive');
+                const uiElements = document.querySelectorAll('.interactive, #library-drawer');
                 uiElements.forEach(el => {
                     el.addEventListener('touchstart', () => { this.isUIInteraction = true; });
                     el.addEventListener('touchend', () => { setTimeout(() => { this.isUIInteraction = false; }, 200); });
                     el.addEventListener('click', (e) => { e.stopPropagation(); this.isUIInteraction = true; setTimeout(() => { this.isUIInteraction = false; }, 200); });
                 });
 
-                // Global Gestures
                 window.addEventListener('touchstart', (e) => this.onTouchStart(e), {passive: false});
                 window.addEventListener('touchmove', (e) => this.onTouchMove(e), {passive: false});
                 window.addEventListener('touchend', () => this.onTouchEnd());
@@ -218,21 +265,58 @@
                 btn.onclick = (e) => { e.stopPropagation(); callback(); };
             }
 
-            // --- SEAMLESS GESTURE LOGIC ---
+            // --- LIBRARY LOGIC ---
+            renderLibrary() {
+                const container = document.getElementById('model-list-container');
+                container.innerHTML = '';
+
+                ASSETS.forEach(asset => {
+                    const card = document.createElement('div');
+                    card.className = `model-card ${asset.id === this.activeAssetId ? 'active' : ''}`;
+                    card.innerHTML = `<span class="model-icon">${asset.icon}</span><div class="model-name">${asset.name}</div>`;
+                    
+                    card.onclick = (e) => {
+                        e.stopPropagation();
+                        this.selectModelFromLibrary(asset);
+                    };
+                    container.appendChild(card);
+                });
+            }
+
+            selectModelFromLibrary(asset) {
+                this.activeAssetId = asset.id;
+                this.currentModelUrl = asset.file;
+                
+                // Update UI Active State
+                document.querySelectorAll('.model-card').forEach(el => el.classList.remove('active'));
+                // Re-render handled by creating class, but simple toggle here is faster:
+                this.renderLibrary();
+
+                document.getElementById('toast').innerText = `Memuat ${asset.name}...`;
+                
+                // Load the new model
+                const loader = new THREE.GLTFLoader();
+                loader.load(this.currentModelUrl, (gltf) => {
+                    this.modelTemplate = gltf.scene;
+                    document.getElementById('toast').innerText = `${asset.name} Siap ditempatkan!`;
+                    document.getElementById('library-drawer').classList.remove('open');
+                }, undefined, (err) => {
+                    document.getElementById('toast').innerText = "Gagal memuat model!";
+                    console.error(err);
+                });
+            }
+
+            // --- GESTURE LOGIC ---
             onTouchStart(e) {
                 if (!this.selectedObject || this.fpvMode) return;
-                
-                this.isDragging = false; // Reset drag flag
+                this.isDragging = false; 
 
-                // 2 Fingers = Pinch (Scale)
                 if (e.touches.length === 2) {
                     const dx = e.touches[0].pageX - e.touches[1].pageX;
                     const dy = e.touches[0].pageY - e.touches[1].pageY;
                     this.startDist = Math.hypot(dx, dy);
                     this.startScale = this.selectedObject.scale.x;
                 }
-                
-                // 1 Finger = Swipe (Rotate)
                 if (e.touches.length === 1) {
                     this.touchStartX = e.touches[0].pageX;
                     this.initialRotation = this.selectedObject.rotation.y;
@@ -241,61 +325,46 @@
 
             onTouchMove(e) {
                 if (!this.selectedObject || this.fpvMode) return;
-
-                // 2 FINGERS: SCALE
+                
                 if (e.touches.length === 2) {
                     e.preventDefault(); 
-                    this.isDragging = true; // Mark as dragging so we don't 'click'
-                    
+                    this.isDragging = true; 
                     const dx = e.touches[0].pageX - e.touches[1].pageX;
                     const dy = e.touches[0].pageY - e.touches[1].pageY;
                     const currDist = Math.hypot(dx, dy);
-                    
                     if (this.startDist > 0) {
                         const scaleFactor = currDist / this.startDist;
                         let newScale = this.startScale * scaleFactor;
-                        newScale = Math.max(0.1, Math.min(newScale, 5.0)); // Clamp
+                        newScale = Math.max(0.1, Math.min(newScale, 5.0));
                         this.selectedObject.scale.set(newScale, newScale, newScale);
                         this.updateBox();
                     }
                 }
-
-                // 1 FINGER: ROTATE
                 else if (e.touches.length === 1) {
                     const dx = e.touches[0].pageX - this.touchStartX;
-                    
-                    // Threshold to detect drag vs accidental twitch
                     if (Math.abs(dx) > 10) {
                         e.preventDefault();
-                        this.isDragging = true; // Mark as dragging
-                        
+                        this.isDragging = true; 
                         const sensitivity = 0.01;
                         this.selectedObject.rotation.y = this.initialRotation + (dx * sensitivity);
                         this.updateBox();
                     }
                 }
             }
-
-            onTouchEnd() {
-                // Short delay to clear dragging flag, allowing proper clicks if it wasn't a drag
-                setTimeout(() => { this.isDragging = false; }, 100);
-            }
+            onTouchEnd() { setTimeout(() => { this.isDragging = false; }, 100); }
 
             // --- AR CORE ---
             async checkXR() {
                 if (navigator.xr && await navigator.xr.isSessionSupported('immersive-ar')) {
                     document.getElementById('status-text').innerText = "Siap.";
                     document.getElementById('btn-start').disabled = false;
-                } else {
-                    document.getElementById('status-text').innerText = "AR Tidak Didukung.";
-                }
+                } else { document.getElementById('status-text').innerText = "AR Tidak Didukung."; }
             }
 
             async startAR() {
                 document.getElementById('start-screen').style.display = 'none';
                 this.session = await navigator.xr.requestSession('immersive-ar', {
-                    requiredFeatures: ['hit-test'],
-                    optionalFeatures: ['dom-overlay'],
+                    requiredFeatures: ['hit-test'], optionalFeatures: ['dom-overlay'],
                     domOverlay: { root: document.getElementById('overlay-container') }
                 });
 
@@ -311,21 +380,22 @@
                 light.position.set(5, 10, 7);
                 this.scene.add(light);
                 this.scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-
                 this.camera = new THREE.PerspectiveCamera();
                 this.camera.matrixAutoUpdate = false;
 
                 const loader = new THREE.GLTFLoader();
+                
+                // Load Reticle
                 loader.load('https://immersive-web.github.io/webxr-samples/media/gltf/reticle/reticle.gltf', (gltf) => {
                     this.reticle = gltf.scene;
                     this.reticle.visible = false;
                     this.scene.add(this.reticle);
                 });
                 
-                loader.load('tower_house_design.glb', (gltf) => {
-                    this.modelTemplate = gltf.scene;
-                });
+                // Load Initial Selected Model
+                this.selectModelFromLibrary(ASSETS[0]); 
 
+                // Highlight Box
                 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
                 const boxMat = new THREE.LineBasicMaterial({ color: 0xffff00 });
                 this.highlight = new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), boxMat);
@@ -344,15 +414,11 @@
             }
 
             onSelect(event) {
-                // Checkers to prevent conflicts:
-                if (this.isUIInteraction) return; // 1. Don't click through UI
-                if (this.fpvMode) return;         // 2. Don't click in FPV
-                if (this.isDragging) return;      // 3. Don't click if we just finished dragging/resizing
+                if (this.isUIInteraction || this.fpvMode || this.isDragging) return;
 
                 const frame = event.frame;
                 const inputSource = event.inputSource;
 
-                // Raycast to SELECT
                 if (inputSource.targetRaySpace) {
                     const pose = frame.getPose(inputSource.targetRaySpace, this.refSpace);
                     if (pose) {
@@ -372,7 +438,6 @@
                     }
                 }
 
-                // Place Object
                 if (this.reticle && this.reticle.visible && this.modelTemplate && !this.selectedObject) {
                     const clone = this.modelTemplate.clone();
                     clone.position.copy(this.reticle.position);
@@ -380,7 +445,6 @@
                     this.placedObjects.push(clone);
                     this.selectObject(clone);
                 } else if (this.selectedObject) {
-                    // Tap on empty space to Deselect (Only if not dragging)
                     this.deselect();
                 }
             }
@@ -389,6 +453,7 @@
                 this.selectedObject = obj;
                 this.updateBox();
                 document.getElementById('action-bar').style.display = 'flex';
+                document.getElementById('idle-menu').style.display = 'none'; // Sembunyikan library saat ada yg diselect
                 document.getElementById('toast').innerText = "1 Jari: Putar | 2 Jari: Cubit";
             }
 
@@ -396,6 +461,7 @@
                 this.selectedObject = null;
                 this.highlight.visible = false;
                 document.getElementById('action-bar').style.display = 'none';
+                document.getElementById('idle-menu').style.display = 'flex'; // Munculkan library lagi
                 document.getElementById('toast').innerText = "Ketuk lantai untuk menempatkan";
             }
 
@@ -430,14 +496,9 @@
                 document.getElementById('overlay-container').style.display = 'none';
                 document.getElementById('fpv-ui').style.display = 'block';
 
-                this.joystick = nipplejs.create({
-                    zone: document.getElementById('joystick-zone'),
-                    mode: 'static', position: {left: '50%', top: '50%'}, color: 'white'
-                });
+                this.joystick = nipplejs.create({ zone: document.getElementById('joystick-zone'), mode: 'static', position: {left: '50%', top: '50%'}, color: 'white' });
                 this.moveVec = {x:0, z:0};
-                this.joystick.on('move', (evt, data) => {
-                    if(data.vector) { this.moveVec.z = data.vector.y; this.moveVec.x = data.vector.x; }
-                });
+                this.joystick.on('move', (evt, data) => { if(data.vector) { this.moveVec.z = data.vector.y; this.moveVec.x = data.vector.x; } });
                 this.joystick.on('end', () => this.moveVec = {x:0, z:0});
             }
 
@@ -502,7 +563,6 @@
                 this.deselect();
             }
         }
-
         window.onload = () => new ARApp();
     </script>
 </body>
