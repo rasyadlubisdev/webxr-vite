@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>ARCHI AR</title>
+    <title>AR Nano Banana - Fixed Library</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
     
     <style>
@@ -20,21 +20,24 @@
             -webkit-user-select: none; user-select: none;
         }
 
+        /* --- UI CONTAINER (Default: HIDDEN) --- */
         #overlay-container {
+            display: none; /* FIX: Sembunyikan saat awal */
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none; z-index: 100;
-            display: flex; flex-direction: column; justify-content: space-between;
+            flex-direction: column; justify-content: space-between;
         }
 
         .interactive { pointer-events: auto !important; }
 
-        /* Start Screen */
+        /* --- START SCREEN --- */
         #start-screen {
             position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
             background: rgba(30,30,30,0.9); padding: 30px; border-radius: 20px;
             text-align: center; color: white; border: var(--glass-border);
             pointer-events: auto; z-index: 200; width: 80%; max-width: 300px;
+            display: block; /* FIX: Tampil saat awal */
         }
         #btn-start {
             margin-top: 20px; padding: 12px 30px; background: var(--accent);
@@ -59,7 +62,7 @@
             backdrop-filter: blur(4px);
         }
 
-        /* MENU UTAMA (Idle State) */
+        /* IDLE MENU */
         #idle-menu {
             display: flex; gap: 10px; pointer-events: none;
             transition: opacity 0.3s;
@@ -102,7 +105,7 @@
         .model-icon { font-size: 24px; margin-bottom: 5px; display: block; }
         .model-name { font-size: 11px; color: #ccc; }
 
-        /* Action Bar (Selected State) */
+        /* Action Bar */
         #action-bar {
             display: none; flex-wrap: wrap; justify-content: center; gap: 10px;
             background: var(--glass-bg); padding: 12px 20px; border-radius: 24px;
@@ -142,7 +145,7 @@
         <div style="flex:1"></div>
         
         <div id="hud-bottom">
-            <div id="toast">Pilih model dari Library & ketuk lantai</div>
+            <div id="toast">Pilih model & ketuk lantai</div>
             
             <div id="idle-menu">
                 <button id="btn-library" class="btn-main interactive">📂 Library 3D</button>
@@ -184,12 +187,10 @@
     <script src="https://unpkg.com/three@0.126.0/examples/js/loaders/GLTFLoader.js"></script>
 
     <script>
-        // --- DATA LIBRARY ---
-        // Tambahkan model Anda di sini
+        // DATA MODEL ANDA
         const ASSETS = [
-            { id: 1, name: "Tower House", file: "3d_assets/tower_house_design.glb", icon: "🏠" },
-            { id: 2, name: "Astronaut", file: "3d_assets/Astronaut.glb", icon: "🧑‍🚀" }, // Pastikan file ini ada
-            // { id: 3, name: "Pohon", file: "3d_assets/tree.glb", icon: "🌳" } // Contoh
+            { id: 1, name: "Tower House", file: "tower_house_design.glb", icon: "🏠" },
+            { id: 2, name: "Model Lain", file: "3d_assets/model_lain.glb", icon: "🏢" } // Sesuaikan path
         ];
 
         class ARApp {
@@ -198,7 +199,7 @@
                 this.selectedObject = null;
                 this.reticle = null;
                 this.modelTemplate = null;
-                this.currentModelUrl = ASSETS[0].file; // Default load object pertama
+                this.currentModelUrl = ASSETS[0].file;
                 this.activeAssetId = ASSETS[0].id;
                 
                 this.fpvMode = false;
@@ -221,18 +222,18 @@
                 document.getElementById('btn-exit').onclick = () => this.endAR();
                 document.getElementById('btn-reset').onclick = () => this.resetScene();
 
-                // Library Interactions
+                // Library Control
                 document.getElementById('btn-library').onclick = (e) => {
                     e.stopPropagation();
-                    document.getElementById('library-drawer').classList.add('open');
                     this.isUIInteraction = true;
+                    document.getElementById('library-drawer').classList.add('open');
                 };
                 document.getElementById('btn-close-lib').onclick = (e) => {
                     e.stopPropagation();
                     document.getElementById('library-drawer').classList.remove('open');
                 };
 
-                // Action Buttons
+                // Actions
                 this.bindButton('btn-delete', () => this.deleteObject());
                 this.bindButton('btn-deselect', () => this.deselect());
                 this.bindButton('btn-fpv', () => this.enterFPV());
@@ -265,20 +266,14 @@
                 btn.onclick = (e) => { e.stopPropagation(); callback(); };
             }
 
-            // --- LIBRARY LOGIC ---
             renderLibrary() {
                 const container = document.getElementById('model-list-container');
                 container.innerHTML = '';
-
                 ASSETS.forEach(asset => {
                     const card = document.createElement('div');
                     card.className = `model-card ${asset.id === this.activeAssetId ? 'active' : ''}`;
                     card.innerHTML = `<span class="model-icon">${asset.icon}</span><div class="model-name">${asset.name}</div>`;
-                    
-                    card.onclick = (e) => {
-                        e.stopPropagation();
-                        this.selectModelFromLibrary(asset);
-                    };
+                    card.onclick = (e) => { e.stopPropagation(); this.selectModelFromLibrary(asset); };
                     container.appendChild(card);
                 });
             }
@@ -286,19 +281,14 @@
             selectModelFromLibrary(asset) {
                 this.activeAssetId = asset.id;
                 this.currentModelUrl = asset.file;
+                this.renderLibrary(); // Re-render for active border
                 
-                // Update UI Active State
-                document.querySelectorAll('.model-card').forEach(el => el.classList.remove('active'));
-                // Re-render handled by creating class, but simple toggle here is faster:
-                this.renderLibrary();
-
                 document.getElementById('toast').innerText = `Memuat ${asset.name}...`;
                 
-                // Load the new model
                 const loader = new THREE.GLTFLoader();
                 loader.load(this.currentModelUrl, (gltf) => {
                     this.modelTemplate = gltf.scene;
-                    document.getElementById('toast').innerText = `${asset.name} Siap ditempatkan!`;
+                    document.getElementById('toast').innerText = `${asset.name} Siap! Ketuk lantai.`;
                     document.getElementById('library-drawer').classList.remove('open');
                 }, undefined, (err) => {
                     document.getElementById('toast').innerText = "Gagal memuat model!";
@@ -306,11 +296,10 @@
                 });
             }
 
-            // --- GESTURE LOGIC ---
+            // GESTURES
             onTouchStart(e) {
                 if (!this.selectedObject || this.fpvMode) return;
                 this.isDragging = false; 
-
                 if (e.touches.length === 2) {
                     const dx = e.touches[0].pageX - e.touches[1].pageX;
                     const dy = e.touches[0].pageY - e.touches[1].pageY;
@@ -353,7 +342,7 @@
             }
             onTouchEnd() { setTimeout(() => { this.isDragging = false; }, 100); }
 
-            // --- AR CORE ---
+            // AR CORE
             async checkXR() {
                 if (navigator.xr && await navigator.xr.isSessionSupported('immersive-ar')) {
                     document.getElementById('status-text').innerText = "Siap.";
@@ -362,7 +351,10 @@
             }
 
             async startAR() {
+                // VISIBILITY SWAP: Start Screen HIDDEN, Overlay SHOWN
                 document.getElementById('start-screen').style.display = 'none';
+                document.getElementById('overlay-container').style.display = 'flex';
+
                 this.session = await navigator.xr.requestSession('immersive-ar', {
                     requiredFeatures: ['hit-test'], optionalFeatures: ['dom-overlay'],
                     domOverlay: { root: document.getElementById('overlay-container') }
@@ -384,18 +376,15 @@
                 this.camera.matrixAutoUpdate = false;
 
                 const loader = new THREE.GLTFLoader();
-                
-                // Load Reticle
                 loader.load('https://immersive-web.github.io/webxr-samples/media/gltf/reticle/reticle.gltf', (gltf) => {
                     this.reticle = gltf.scene;
                     this.reticle.visible = false;
                     this.scene.add(this.reticle);
                 });
                 
-                // Load Initial Selected Model
+                // Load First Model
                 this.selectModelFromLibrary(ASSETS[0]); 
 
-                // Highlight Box
                 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
                 const boxMat = new THREE.LineBasicMaterial({ color: 0xffff00 });
                 this.highlight = new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), boxMat);
@@ -453,7 +442,7 @@
                 this.selectedObject = obj;
                 this.updateBox();
                 document.getElementById('action-bar').style.display = 'flex';
-                document.getElementById('idle-menu').style.display = 'none'; // Sembunyikan library saat ada yg diselect
+                document.getElementById('idle-menu').style.display = 'none';
                 document.getElementById('toast').innerText = "1 Jari: Putar | 2 Jari: Cubit";
             }
 
@@ -461,7 +450,7 @@
                 this.selectedObject = null;
                 this.highlight.visible = false;
                 document.getElementById('action-bar').style.display = 'none';
-                document.getElementById('idle-menu').style.display = 'flex'; // Munculkan library lagi
+                document.getElementById('idle-menu').style.display = 'flex';
                 document.getElementById('toast').innerText = "Ketuk lantai untuk menempatkan";
             }
 
@@ -555,7 +544,9 @@
 
             endAR() {
                 this.session.end();
+                // VISIBILITY SWAP: Start Screen SHOWN, Overlay HIDDEN
                 document.getElementById('start-screen').style.display = 'block';
+                document.getElementById('overlay-container').style.display = 'none';
             }
             resetScene() {
                 this.placedObjects.forEach(o => this.scene.remove(o));
