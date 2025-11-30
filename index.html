@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Nano Banana - Pinch Resize</title>
+    <title>AR Nano Banana - Seamless Gesture</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
     
     <style>
@@ -11,7 +11,6 @@
             --glass-bg: rgba(20, 20, 20, 0.85);
             --glass-border: 1px solid rgba(255, 255, 255, 0.15);
             --accent: #2ecc71;
-            --active: #f1c40f;
             --danger: #e74c3c;
         }
 
@@ -32,6 +31,7 @@
 
         .interactive { pointer-events: auto !important; }
 
+        /* Start Screen */
         #start-screen {
             position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
@@ -49,6 +49,7 @@
             color: white; font-weight: bold; font-size: 16px;
         }
 
+        /* Top HUD */
         .icon-btn {
             width: 44px; height: 44px; border-radius: 50%;
             background: rgba(50,50,50,0.8); border: var(--glass-border);
@@ -65,14 +66,18 @@
             display: flex; flex-direction: column; align-items: center; gap: 10px;
         }
 
+        /* Toast Info */
         #toast {
-            background: rgba(0,0,0,0.7); color: white;
+            background: rgba(0,0,0,0.6); color: white;
             padding: 8px 16px; border-radius: 20px; font-size: 13px;
             margin-bottom: 10px; text-align: center;
+            backdrop-filter: blur(4px);
+            transition: all 0.3s;
         }
 
+        /* Action Bar (Simplified) */
         #action-bar {
-            display: none;
+            display: none; /* Hidden default */
             flex-wrap: wrap; justify-content: center; gap: 10px;
             background: var(--glass-bg);
             padding: 12px 20px; border-radius: 24px;
@@ -91,10 +96,10 @@
         }
         .pill-btn:active { transform: scale(0.95); }
         
-        .btn-mode-active { background: var(--active) !important; color: #000 !important; box-shadow: 0 0 10px var(--active); }
         .btn-delete { background: rgba(231, 76, 60, 0.2); color: #ff8787; border: 1px solid rgba(231, 76, 60, 0.5); }
         .btn-fpv { background: rgba(46, 204, 113, 0.2); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.5); }
 
+        /* FPV UI */
         #fpv-ui {
             display: none; position: absolute; top:0; left:0; width:100%; height:100%;
             pointer-events: none; z-index: 150;
@@ -118,14 +123,15 @@
             <button id="btn-reset" class="icon-btn interactive">↺</button>
             <button id="btn-exit" class="icon-btn red interactive">✕</button>
         </div>
+
         <div style="flex:1"></div>
+
         <div id="hud-bottom">
             <div id="toast">Arahkan ke lantai & ketuk untuk menempatkan</div>
+            
             <div id="action-bar" class="interactive">
-                <button id="btn-scale" class="pill-btn">📏 Ukuran</button>
-                <button id="btn-rotate" class="pill-btn">🔄 Putar</button>
                 <button id="btn-fpv" class="pill-btn btn-fpv">🚶 FPV</button>
-                <div style="width:100%; height:1px; background:rgba(255,255,255,0.1); margin: 5px 0;"></div>
+                <div style="width:1px; height:20px; background:rgba(255,255,255,0.2); margin: 0 5px;"></div>
                 <button id="btn-deselect" class="pill-btn">Batal</button>
                 <button id="btn-delete" class="pill-btn btn-delete">Hapus</button>
             </div>
@@ -156,13 +162,15 @@
                 this.selectedObject = null;
                 this.reticle = null;
                 this.session = null;
-                this.appState = 'IDLE'; 
-                this.isUIInteraction = false; 
+                
+                this.fpvMode = false;
+                this.isUIInteraction = false;
+                this.isDragging = false; // Flag to distinguish Swipe vs Tap
 
-                // Gestures Variables
+                // Gesture Tracking Vars
                 this.touchStartX = 0;
-                this.initialValue = 0; // For Rotate (1 finger)
-                this.startDist = 0;    // For Pinch (2 fingers)
+                this.initialRotation = 0;
+                this.startDist = 0;
                 this.startScale = 1;
 
                 this.initUI();
@@ -174,13 +182,13 @@
                 document.getElementById('btn-exit').onclick = () => this.endAR();
                 document.getElementById('btn-reset').onclick = () => this.resetScene();
 
-                this.bindButton('btn-scale', () => this.toggleMode('MODE_SCALE'));
-                this.bindButton('btn-rotate', () => this.toggleMode('MODE_ROTATE'));
+                // Removed Bindings for Scale/Rotate buttons (They are gone!)
                 this.bindButton('btn-delete', () => this.deleteObject());
                 this.bindButton('btn-deselect', () => this.deselect());
                 this.bindButton('btn-fpv', () => this.enterFPV());
                 document.getElementById('btn-exit-fpv').onclick = () => this.exitFPV();
 
+                // Elevation Hold
                 const setupHold = (id, val) => {
                     const btn = document.getElementById(id);
                     const start = (e) => { e.preventDefault(); this.verticalSpeed = val; };
@@ -191,6 +199,7 @@
                 setupHold('btn-up', 0.02);
                 setupHold('btn-down', -0.02);
 
+                // UI Blockers
                 const uiElements = document.querySelectorAll('.interactive');
                 uiElements.forEach(el => {
                     el.addEventListener('touchstart', () => { this.isUIInteraction = true; });
@@ -198,8 +207,10 @@
                     el.addEventListener('click', (e) => { e.stopPropagation(); this.isUIInteraction = true; setTimeout(() => { this.isUIInteraction = false; }, 200); });
                 });
 
+                // Global Gestures
                 window.addEventListener('touchstart', (e) => this.onTouchStart(e), {passive: false});
                 window.addEventListener('touchmove', (e) => this.onTouchMove(e), {passive: false});
+                window.addEventListener('touchend', () => this.onTouchEnd());
             }
 
             bindButton(id, callback) {
@@ -207,31 +218,35 @@
                 btn.onclick = (e) => { e.stopPropagation(); callback(); };
             }
 
-            // --- GESTURE LOGIC UPDATED ---
+            // --- SEAMLESS GESTURE LOGIC ---
             onTouchStart(e) {
-                if (!this.selectedObject) return;
+                if (!this.selectedObject || this.fpvMode) return;
+                
+                this.isDragging = false; // Reset drag flag
 
-                // Mode Scale: 2 Fingers (Pinch)
-                if (this.appState === 'MODE_SCALE' && e.touches.length === 2) {
+                // 2 Fingers = Pinch (Scale)
+                if (e.touches.length === 2) {
                     const dx = e.touches[0].pageX - e.touches[1].pageX;
                     const dy = e.touches[0].pageY - e.touches[1].pageY;
                     this.startDist = Math.hypot(dx, dy);
                     this.startScale = this.selectedObject.scale.x;
                 }
                 
-                // Mode Rotate: 1 Finger (Swipe)
-                if (this.appState === 'MODE_ROTATE' && e.touches.length === 1) {
+                // 1 Finger = Swipe (Rotate)
+                if (e.touches.length === 1) {
                     this.touchStartX = e.touches[0].pageX;
-                    this.initialValue = this.selectedObject.rotation.y;
+                    this.initialRotation = this.selectedObject.rotation.y;
                 }
             }
 
             onTouchMove(e) {
-                if (!this.selectedObject) return;
+                if (!this.selectedObject || this.fpvMode) return;
 
-                // PINCH RESIZE (2 Fingers)
-                if (this.appState === 'MODE_SCALE' && e.touches.length === 2) {
+                // 2 FINGERS: SCALE
+                if (e.touches.length === 2) {
                     e.preventDefault(); 
+                    this.isDragging = true; // Mark as dragging so we don't 'click'
+                    
                     const dx = e.touches[0].pageX - e.touches[1].pageX;
                     const dy = e.touches[0].pageY - e.touches[1].pageY;
                     const currDist = Math.hypot(dx, dy);
@@ -239,53 +254,34 @@
                     if (this.startDist > 0) {
                         const scaleFactor = currDist / this.startDist;
                         let newScale = this.startScale * scaleFactor;
-                        newScale = Math.max(0.1, Math.min(newScale, 5.0));
+                        newScale = Math.max(0.1, Math.min(newScale, 5.0)); // Clamp
                         this.selectedObject.scale.set(newScale, newScale, newScale);
                         this.updateBox();
                     }
                 }
 
-                // SWIPE ROTATE (1 Finger)
-                else if (this.appState === 'MODE_ROTATE' && e.touches.length === 1) {
-                    e.preventDefault();
+                // 1 FINGER: ROTATE
+                else if (e.touches.length === 1) {
                     const dx = e.touches[0].pageX - this.touchStartX;
-                    const sensitivity = 0.01;
-                    this.selectedObject.rotation.y = this.initialValue + (dx * sensitivity);
-                    this.updateBox();
+                    
+                    // Threshold to detect drag vs accidental twitch
+                    if (Math.abs(dx) > 10) {
+                        e.preventDefault();
+                        this.isDragging = true; // Mark as dragging
+                        
+                        const sensitivity = 0.01;
+                        this.selectedObject.rotation.y = this.initialRotation + (dx * sensitivity);
+                        this.updateBox();
+                    }
                 }
             }
 
-            toggleMode(targetMode) {
-                if (this.appState === targetMode) {
-                    this.setMode('SELECTED');
-                } else {
-                    this.setMode(targetMode);
-                }
+            onTouchEnd() {
+                // Short delay to clear dragging flag, allowing proper clicks if it wasn't a drag
+                setTimeout(() => { this.isDragging = false; }, 100);
             }
 
-            setMode(mode) {
-                this.appState = mode;
-                const btnScale = document.getElementById('btn-scale');
-                const btnRotate = document.getElementById('btn-rotate');
-                const toast = document.getElementById('toast');
-
-                btnScale.classList.remove('btn-mode-active');
-                btnRotate.classList.remove('btn-mode-active');
-
-                if (mode === 'MODE_SCALE') {
-                    btnScale.classList.add('btn-mode-active');
-                    toast.innerText = "Cubit layar dengan 2 jari untuk Resize";
-                } else if (mode === 'MODE_ROTATE') {
-                    btnRotate.classList.add('btn-mode-active');
-                    toast.innerText = "Geser 1 jari Kiri/Kanan untuk Memutar";
-                } else if (mode === 'SELECTED') {
-                    toast.innerText = "Pilih mode di bawah";
-                } else if (mode === 'IDLE') {
-                    document.getElementById('action-bar').style.display = 'none';
-                    toast.innerText = "Ketuk lantai untuk menempatkan";
-                }
-            }
-
+            // --- AR CORE ---
             async checkXR() {
                 if (navigator.xr && await navigator.xr.isSessionSupported('immersive-ar')) {
                     document.getElementById('status-text').innerText = "Siap.";
@@ -348,12 +344,15 @@
             }
 
             onSelect(event) {
-                if (this.isUIInteraction) return;
-                if (this.appState === 'MODE_SCALE' || this.appState === 'MODE_ROTATE' || this.appState === 'FPV') return;
+                // Checkers to prevent conflicts:
+                if (this.isUIInteraction) return; // 1. Don't click through UI
+                if (this.fpvMode) return;         // 2. Don't click in FPV
+                if (this.isDragging) return;      // 3. Don't click if we just finished dragging/resizing
 
                 const frame = event.frame;
                 const inputSource = event.inputSource;
 
+                // Raycast to SELECT
                 if (inputSource.targetRaySpace) {
                     const pose = frame.getPose(inputSource.targetRaySpace, this.refSpace);
                     if (pose) {
@@ -373,6 +372,7 @@
                     }
                 }
 
+                // Place Object
                 if (this.reticle && this.reticle.visible && this.modelTemplate && !this.selectedObject) {
                     const clone = this.modelTemplate.clone();
                     clone.position.copy(this.reticle.position);
@@ -380,6 +380,7 @@
                     this.placedObjects.push(clone);
                     this.selectObject(clone);
                 } else if (this.selectedObject) {
+                    // Tap on empty space to Deselect (Only if not dragging)
                     this.deselect();
                 }
             }
@@ -388,14 +389,14 @@
                 this.selectedObject = obj;
                 this.updateBox();
                 document.getElementById('action-bar').style.display = 'flex';
-                this.setMode('SELECTED');
+                document.getElementById('toast').innerText = "1 Jari: Putar | 2 Jari: Cubit";
             }
 
             deselect() {
                 this.selectedObject = null;
                 this.highlight.visible = false;
                 document.getElementById('action-bar').style.display = 'none';
-                this.setMode('IDLE');
+                document.getElementById('toast').innerText = "Ketuk lantai untuk menempatkan";
             }
 
             deleteObject() {
@@ -420,7 +421,7 @@
 
             enterFPV() {
                 if(!this.selectedObject) return;
-                this.setMode('FPV');
+                this.fpvMode = true;
                 this.fpvObject = this.selectedObject;
                 this.savedT = { s: this.fpvObject.scale.clone(), p: this.fpvObject.position.clone(), r: this.fpvObject.rotation.clone() };
                 const big = this.savedT.s.x * 20; 
@@ -447,16 +448,16 @@
                     this.fpvObject.rotation.copy(this.savedT.r);
                 }
                 if(this.joystick) this.joystick.destroy();
+                this.fpvMode = false;
                 document.getElementById('fpv-ui').style.display = 'none';
                 document.getElementById('overlay-container').style.display = 'flex';
-                this.setMode('SELECTED');
             }
 
             render(t, frame) {
                 this.session.requestAnimationFrame((t, f) => this.render(t, f));
                 const pose = frame.getViewerPose(this.refSpace);
                 if (pose) {
-                    if (this.appState !== 'FPV' && this.hitTestSource) {
+                    if (!this.fpvMode && this.hitTestSource) {
                         const res = frame.getHitTestResults(this.hitTestSource);
                         if (res.length > 0) {
                             const hit = res[0].getPose(this.refSpace);
@@ -465,7 +466,7 @@
                             this.reticle.updateMatrixWorld(true);
                         } else this.reticle.visible = false;
                     }
-                    if (this.appState === 'FPV' && this.fpvObject) {
+                    if (this.fpvMode && this.fpvObject) {
                         const view = pose.views[0];
                         const mat = new THREE.Matrix4().fromArray(view.transform.matrix);
                         const fwd = new THREE.Vector3(0,0,-1).applyMatrix4(mat); fwd.y=0; fwd.normalize();
@@ -491,14 +492,14 @@
                 }
             }
 
+            endAR() {
+                this.session.end();
+                document.getElementById('start-screen').style.display = 'block';
+            }
             resetScene() {
                 this.placedObjects.forEach(o => this.scene.remove(o));
                 this.placedObjects = [];
                 this.deselect();
-            }
-            endAR() {
-                this.session.end();
-                document.getElementById('start-screen').style.display = 'block';
             }
         }
 
