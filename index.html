@@ -3,211 +3,154 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>ARCHI AR</title>
+    <title>AR Nano Banana - State Mode</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
     
     <style>
         :root {
-            --glass-bg: rgba(20, 20, 20, 0.6);
-            --glass-border: 1px solid rgba(255, 255, 255, 0.2);
-            --blur: blur(12px);
-            --accent: #2ecc71;
+            --glass-bg: rgba(20, 20, 20, 0.85);
+            --glass-border: 1px solid rgba(255, 255, 255, 0.15);
+            --accent: #2ecc71; /* Hijau */
+            --active: #f1c40f; /* Kuning untuk mode aktif */
+            --danger: #e74c3c; /* Merah */
         }
 
         body {
             margin: 0;
             overflow: hidden;
             background-color: #111;
-            font-family: sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             -webkit-user-select: none;
             user-select: none;
         }
 
-        /* --- UI Overlay Logic --- 
-           PENTING: pointer-events: none agar tembus pandang ke canvas
-        */
+        /* Container UI (Pointer Events None agar tembus ke canvas) */
         #overlay-container {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; 
-            z-index: 100;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 100;
+            display: flex; flex-direction: column; justify-content: space-between;
         }
 
-        /* Tombol dan Panel harus pointer-events: auto agar bisa diklik */
-        .interactive {
-            pointer-events: auto !important;
-        }
+        /* Class untuk elemen yang BISA diklik */
+        .interactive { pointer-events: auto !important; }
 
-        /* --- Start Screen --- */
+        /* Start Screen */
         #start-screen {
-            position: absolute;
-            top: 50%; left: 50%;
+            position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(255,255,255,0.1);
-            backdrop-filter: blur(20px);
-            padding: 30px;
-            border-radius: 20px;
-            text-align: center;
-            color: white;
+            background: rgba(30,30,30,0.9);
+            padding: 30px; border-radius: 20px;
+            text-align: center; color: white;
             border: var(--glass-border);
-            pointer-events: auto;
-            z-index: 200;
-            width: 80%;
-            max-width: 300px;
+            pointer-events: auto; z-index: 200;
+            width: 80%; max-width: 300px;
         }
 
         #btn-start {
-            margin-top: 20px;
-            padding: 12px 30px;
-            background: var(--accent);
-            border: none;
-            border-radius: 50px;
-            color: white;
-            font-weight: bold;
-            font-size: 16px;
-        }
-        #btn-start:disabled { background: #555; }
-
-        /* --- AR HUD --- */
-        #hud-top {
-            padding: 20px;
-            display: flex;
-            justify-content: flex-end;
+            margin-top: 20px; padding: 12px 30px;
+            background: var(--accent); border: none; border-radius: 50px;
+            color: white; font-weight: bold; font-size: 16px;
         }
 
+        /* HUD Styles */
         .icon-btn {
-            width: 44px; height: 44px;
-            border-radius: 50%;
-            background: var(--glass-bg);
-            border: var(--glass-border);
-            color: white;
-            font-size: 18px;
+            width: 44px; height: 44px; border-radius: 50%;
+            background: rgba(50,50,50,0.8); border: var(--glass-border);
+            color: white; font-size: 18px;
             display: flex; align-items: center; justify-content: center;
-            backdrop-filter: var(--blur);
-            transition: transform 0.1s;
+            backdrop-filter: blur(10px); margin-left: 10px;
         }
-        .icon-btn:active { transform: scale(0.9); }
-        .red { color: #ff6b6b; background: rgba(50,0,0,0.5); }
+        .red { color: #ff6b6b; background: rgba(80,0,0,0.6); }
 
+        #hud-top { padding: 20px; display: flex; justify-content: flex-end; }
+        
         #hud-bottom {
-            padding: 30px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 15px;
+            padding: 20px; padding-bottom: 40px;
+            display: flex; flex-direction: column; align-items: center; gap: 10px;
         }
 
-        /* Instructions Toast */
+        /* Toast Message */
         #toast {
-            background: rgba(0,0,0,0.6);
-            color: white;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 14px;
-            backdrop-filter: blur(4px);
-            margin-bottom: 10px;
-            opacity: 0.9;
-            text-align: center;
+            background: rgba(0,0,0,0.7); color: white;
+            padding: 8px 16px; border-radius: 20px; font-size: 13px;
+            margin-bottom: 10px; text-align: center;
         }
 
-        /* Floating Action Bar */
+        /* Action Bar (Menu Bawah) */
         #action-bar {
-            display: flex;
-            gap: 12px;
+            display: none; /* Hidden by default */
+            flex-wrap: wrap; justify-content: center; gap: 10px;
             background: var(--glass-bg);
-            padding: 10px 20px;
-            border-radius: 24px;
+            padding: 12px 20px; border-radius: 24px;
             border: var(--glass-border);
-            backdrop-filter: var(--blur);
-            transform: translateY(100px); /* Hidden by default */
-            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            backdrop-filter: blur(12px);
+            animation: slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
-
-        #action-bar.visible {
-            transform: translateY(0);
-        }
+        @keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
         .pill-btn {
-            padding: 10px 20px;
-            border-radius: 20px;
-            border: none;
-            font-weight: 600;
-            font-size: 14px;
+            padding: 10px 18px; border-radius: 20px; border: none;
+            font-weight: 600; font-size: 13px;
             display: flex; align-items: center; gap: 6px;
+            background: rgba(255,255,255,0.1); color: white;
+            transition: all 0.2s;
         }
-        .btn-glass { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.1); }
-        .btn-glass:active { background: rgba(255,255,255,0.3); }
-        .btn-green { background: var(--accent); color: white; }
-        .btn-red { background: rgba(231, 76, 60, 0.8); color: white; }
+        .pill-btn:active { transform: scale(0.95); }
+        
+        /* State Colors */
+        .btn-mode-active { background: var(--active) !important; color: #000 !important; box-shadow: 0 0 10px var(--active); }
+        .btn-delete { background: rgba(231, 76, 60, 0.2); color: #ff8787; border: 1px solid rgba(231, 76, 60, 0.5); }
+        .btn-fpv { background: rgba(46, 204, 113, 0.2); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.5); }
 
-        /* --- FPV Layout --- */
+        /* FPV UI */
         #fpv-ui {
-            display: none; /* Toggled via JS */
-            position: absolute; top:0; left:0; width:100%; height:100%;
-            pointer-events: none;
-            z-index: 150;
+            display: none; position: absolute; top:0; left:0; width:100%; height:100%;
+            pointer-events: none; z-index: 150;
         }
-        #joystick-zone {
-            position: absolute; bottom: 40px; left: 40px;
-            width: 120px; height: 120px;
-            pointer-events: auto;
-        }
-        #elevation-controls {
-            position: absolute; bottom: 50px; right: 30px;
-            display: flex; flex-direction: column; gap: 15px;
-            pointer-events: auto;
-        }
-        .circle-big { width: 60px; height: 60px; font-size: 24px; }
+        #joystick-zone { position: absolute; bottom: 40px; left: 40px; width: 120px; height: 120px; pointer-events: auto; }
+        #elevation-controls { position: absolute; bottom: 50px; right: 30px; display: flex; flex-direction: column; gap: 15px; pointer-events: auto; }
+        .circle-big { width: 60px; height: 60px; font-size: 24px; background: rgba(255,255,255,0.1); }
 
-        canvas { display: block; }
     </style>
 </head>
 <body>
 
     <div id="start-screen">
         <h2>Nano Banana AR</h2>
-        <p id="status-text">Memuat sistem AR...</p>
+        <p id="status-text">Memuat sistem...</p>
         <button id="btn-start" class="interactive" disabled>Mulai AR</button>
     </div>
 
     <div id="overlay-container">
         <div id="hud-top">
-            <div style="display:flex; gap:10px;">
-                <button id="btn-reset" class="icon-btn interactive" title="Reset">↺</button>
-                <button id="btn-exit" class="icon-btn red interactive" title="Keluar">✕</button>
-            </div>
+            <button id="btn-reset" class="icon-btn interactive">↺</button>
+            <button id="btn-exit" class="icon-btn red interactive">✕</button>
         </div>
 
-        <div style="flex:1;"></div>
+        <div style="flex:1"></div>
 
         <div id="hud-bottom">
             <div id="toast">Arahkan ke lantai & ketuk untuk menempatkan</div>
             
             <div id="action-bar" class="interactive">
-                <button id="btn-deselect" class="pill-btn btn-glass">Batal</button>
-                <button id="btn-delete" class="pill-btn btn-red">Hapus</button>
-                <button id="btn-fpv" class="pill-btn btn-green">🚶 FPV</button>
-            </div>
-            
-            <div id="gesture-hint" style="font-size:12px; color:rgba(255,255,255,0.7); display:none; margin-top:-5px;">
-                Gunakan 2 jari: Cubit (Scale) & Putar (Rotate)
+                <button id="btn-scale" class="pill-btn">📏 Ukuran</button>
+                <button id="btn-rotate" class="pill-btn">🔄 Putar</button>
+                <button id="btn-fpv" class="pill-btn btn-fpv">🚶 FPV</button>
+                <div style="width:100%; height:1px; background:rgba(255,255,255,0.1); margin: 5px 0;"></div>
+                <button id="btn-deselect" class="pill-btn">Batal</button>
+                <button id="btn-delete" class="pill-btn btn-delete">Hapus</button>
             </div>
         </div>
     </div>
 
     <div id="fpv-ui">
         <div style="position:absolute; top:20px; left:20px;">
-            <span style="background:var(--accent); color:white; padding:4px 10px; border-radius:10px; font-size:12px; font-weight:bold;">FPV MODE</span>
+            <span style="background:var(--accent); color:white; padding:4px 10px; border-radius:10px; font-size:12px;">FPV MODE</span>
         </div>
         <div style="position:absolute; top:20px; right:20px; pointer-events:auto;">
             <button id="btn-exit-fpv" class="icon-btn interactive">✕</button>
         </div>
-        
         <div id="joystick-zone"></div>
-        
         <div id="elevation-controls">
             <button id="btn-up" class="icon-btn circle-big interactive">▲</button>
             <button id="btn-down" class="icon-btn circle-big interactive">▼</button>
@@ -218,45 +161,44 @@
     <script src="https://unpkg.com/three@0.126.0/examples/js/loaders/GLTFLoader.js"></script>
 
     <script>
-        class App {
+        class ARApp {
             constructor() {
                 this.placedObjects = [];
                 this.selectedObject = null;
                 this.reticle = null;
-                this.hitTestSource = null;
-                this.xrSession = null;
+                this.session = null;
                 
-                // Gesture State
-                this.gestureState = {
-                    active: false,
-                    startDist: 0,
-                    startAngle: 0,
-                    initialScale: 1,
-                    initialRotation: 0
-                };
+                // --- STATE MANAGEMENT ---
+                // Modes: 'IDLE', 'SELECTED', 'MODE_SCALE', 'MODE_ROTATE', 'FPV'
+                this.appState = 'IDLE'; 
+                
+                // Helper untuk mencegah "Delete Bug" (interaction lock)
+                this.isUIInteraction = false; 
 
-                // FPV State
-                this.fpvMode = false;
-                this.moveVector = { x: 0, z: 0 };
-                this.verticalSpeed = 0;
-                
+                // Movement Logic
+                this.touchStartY = 0;
+                this.touchStartX = 0;
+                this.initialValue = 0; // Stores scale or rotation at start of drag
+
                 this.initUI();
                 this.checkXR();
             }
 
             initUI() {
-                // Main Buttons
+                // Main
                 document.getElementById('btn-start').onclick = () => this.startAR();
                 document.getElementById('btn-exit').onclick = () => this.endAR();
                 document.getElementById('btn-reset').onclick = () => this.resetScene();
-                
-                // Action Buttons
-                document.getElementById('btn-delete').onclick = () => this.deleteObject();
-                document.getElementById('btn-deselect').onclick = () => this.deselect();
-                document.getElementById('btn-fpv').onclick = () => this.enterFPV();
+
+                // Context Menu
+                this.bindButton('btn-scale', () => this.toggleMode('MODE_SCALE'));
+                this.bindButton('btn-rotate', () => this.toggleMode('MODE_ROTATE'));
+                this.bindButton('btn-delete', () => this.deleteObject());
+                this.bindButton('btn-deselect', () => this.deselect());
+                this.bindButton('btn-fpv', () => this.enterFPV());
                 document.getElementById('btn-exit-fpv').onclick = () => this.exitFPV();
 
-                // FPV Elevation
+                // Elevation (FPV)
                 const setupHold = (id, val) => {
                     const btn = document.getElementById(id);
                     const start = (e) => { e.preventDefault(); this.verticalSpeed = val; };
@@ -267,66 +209,121 @@
                 setupHold('btn-up', 0.02);
                 setupHold('btn-down', -0.02);
 
-                // GESTURE LISTENERS (Touch on Window)
+                // UI Interaction Blockers (CRITICAL FIX FOR DELETE BUG)
+                const uiElements = document.querySelectorAll('.interactive');
+                uiElements.forEach(el => {
+                    el.addEventListener('touchstart', () => { this.isUIInteraction = true; });
+                    el.addEventListener('touchend', () => { 
+                        // Delay release to ensure click doesn't pass through
+                        setTimeout(() => { this.isUIInteraction = false; }, 200); 
+                    });
+                    el.addEventListener('click', (e) => {
+                        e.stopPropagation(); // Stop DOM propagation
+                        this.isUIInteraction = true;
+                        setTimeout(() => { this.isUIInteraction = false; }, 200);
+                    });
+                });
+
+                // Global Touch for Manipulation (1 Finger Drag)
                 window.addEventListener('touchstart', (e) => this.onTouchStart(e), {passive: false});
                 window.addEventListener('touchmove', (e) => this.onTouchMove(e), {passive: false});
-                window.addEventListener('touchend', () => this.onTouchEnd());
             }
 
-            // --- GESTURE LOGIC (PINCH & ROTATE) ---
+            bindButton(id, callback) {
+                const btn = document.getElementById(id);
+                btn.onclick = (e) => {
+                    e.stopPropagation(); // Stop event bubbling
+                    callback();
+                };
+            }
+
+            // --- MANIPULATION LOGIC (1 FINGER) ---
             onTouchStart(e) {
-                if (e.touches.length === 2 && this.selectedObject && !this.fpvMode) {
-                    this.gestureState.active = true;
-                    const dx = e.touches[0].pageX - e.touches[1].pageX;
-                    const dy = e.touches[0].pageY - e.touches[1].pageY;
-                    this.gestureState.startDist = Math.hypot(dx, dy);
-                    this.gestureState.startAngle = Math.atan2(dy, dx);
-                    
-                    this.gestureState.initialScale = this.selectedObject.scale.x;
-                    this.gestureState.initialRotation = this.selectedObject.rotation.y;
+                if (e.touches.length === 1 && this.selectedObject) {
+                    this.touchStartY = e.touches[0].pageY;
+                    this.touchStartX = e.touches[0].pageX;
+
+                    if (this.appState === 'MODE_SCALE') {
+                        this.initialValue = this.selectedObject.scale.x;
+                    } else if (this.appState === 'MODE_ROTATE') {
+                        this.initialValue = this.selectedObject.rotation.y;
+                    }
                 }
             }
 
             onTouchMove(e) {
-                if (this.gestureState.active && e.touches.length === 2 && this.selectedObject) {
-                    e.preventDefault(); // Prevent browser zoom
+                // Only act if we are in a specific manipulation mode
+                if (e.touches.length === 1 && this.selectedObject) {
+                    const dy = e.touches[0].pageY - this.touchStartY;
+                    const dx = e.touches[0].pageX - this.touchStartX;
 
-                    const dx = e.touches[0].pageX - e.touches[1].pageX;
-                    const dy = e.touches[0].pageY - e.touches[1].pageY;
-                    
-                    // 1. Calculate Scale (Pinch)
-                    const dist = Math.hypot(dx, dy);
-                    const scaleFactor = dist / this.gestureState.startDist;
-                    let newScale = this.gestureState.initialScale * scaleFactor;
-                    newScale = Math.max(0.1, Math.min(newScale, 5.0)); // Clamp
-                    this.selectedObject.scale.set(newScale, newScale, newScale);
-
-                    // 2. Calculate Rotation (Twist)
-                    const angle = Math.atan2(dy, dx);
-                    const rotationDiff = angle - this.gestureState.startAngle;
-                    this.selectedObject.rotation.y = this.gestureState.initialRotation + rotationDiff;
-                    
-                    this.updateSelectionBox();
+                    if (this.appState === 'MODE_SCALE') {
+                        e.preventDefault(); // Stop scroll
+                        // Drag Up = Bigger, Down = Smaller
+                        const sensitivity = 0.01;
+                        let newScale = this.initialValue - (dy * sensitivity);
+                        newScale = Math.max(0.1, Math.min(newScale, 5.0)); // Clamp
+                        this.selectedObject.scale.set(newScale, newScale, newScale);
+                        this.updateBox();
+                    } 
+                    else if (this.appState === 'MODE_ROTATE') {
+                        e.preventDefault();
+                        // Drag Left/Right to rotate
+                        const sensitivity = 0.01;
+                        this.selectedObject.rotation.y = this.initialValue + (dx * sensitivity);
+                        this.updateBox();
+                    }
                 }
             }
 
-            onTouchEnd() {
-                this.gestureState.active = false;
+            // --- MODE SWITCHING ---
+            toggleMode(targetMode) {
+                // If clicking same mode, turn it off (back to SELECTED)
+                if (this.appState === targetMode) {
+                    this.setMode('SELECTED');
+                } else {
+                    this.setMode(targetMode);
+                }
             }
 
-            // --- WEBXR CORE ---
+            setMode(mode) {
+                this.appState = mode;
+                
+                // UI Visuals
+                const btnScale = document.getElementById('btn-scale');
+                const btnRotate = document.getElementById('btn-rotate');
+                const toast = document.getElementById('toast');
+
+                // Reset colors
+                btnScale.classList.remove('btn-mode-active');
+                btnRotate.classList.remove('btn-mode-active');
+
+                if (mode === 'MODE_SCALE') {
+                    btnScale.classList.add('btn-mode-active');
+                    toast.innerText = "Geser 1 jari NAIK/TURUN untuk ubah ukuran";
+                } else if (mode === 'MODE_ROTATE') {
+                    btnRotate.classList.add('btn-mode-active');
+                    toast.innerText = "Geser 1 jari KIRI/KANAN untuk memutar";
+                } else if (mode === 'SELECTED') {
+                    toast.innerText = "Pilih mode di bawah";
+                } else if (mode === 'IDLE') {
+                    document.getElementById('action-bar').style.display = 'none';
+                    toast.innerText = "Ketuk lantai untuk menempatkan";
+                }
+            }
+
+            // --- CORE AR FUNCTIONS ---
             async checkXR() {
                 if (navigator.xr && await navigator.xr.isSessionSupported('immersive-ar')) {
-                    document.getElementById('status-text').innerText = "Siap untuk AR";
+                    document.getElementById('status-text').innerText = "Siap.";
                     document.getElementById('btn-start').disabled = false;
                 } else {
-                    document.getElementById('status-text').innerText = "WebXR AR tidak didukung";
+                    document.getElementById('status-text').innerText = "AR Tidak Didukung.";
                 }
             }
 
             async startAR() {
                 document.getElementById('start-screen').style.display = 'none';
-                
                 this.session = await navigator.xr.requestSession('immersive-ar', {
                     requiredFeatures: ['hit-test'],
                     optionalFeatures: ['dom-overlay'],
@@ -336,12 +333,10 @@
                 this.renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
                 this.renderer.autoClear = false;
                 this.renderer.outputEncoding = THREE.sRGBEncoding;
-                
-                // IMPORTANT: Create logic to detect tap on screen
+
                 this.session.addEventListener('select', (e) => this.onSelect(e));
                 this.session.addEventListener('end', () => this.endAR());
 
-                // Scene Setup
                 this.scene = new THREE.Scene();
                 const light = new THREE.DirectionalLight(0xffffff, 1);
                 light.position.set(5, 10, 7);
@@ -353,54 +348,50 @@
 
                 // Load Assets
                 const loader = new THREE.GLTFLoader();
-                
-                // Reticle
                 loader.load('https://immersive-web.github.io/webxr-samples/media/gltf/reticle/reticle.gltf', (gltf) => {
                     this.reticle = gltf.scene;
                     this.reticle.visible = false;
                     this.scene.add(this.reticle);
                 });
-
-                // User Model
+                
                 loader.load('tower_house_design.glb', (gltf) => {
                     this.modelTemplate = gltf.scene;
                 });
 
                 // Selection Box
                 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
-                const boxMat = new THREE.LineBasicMaterial({ color: 0x2ecc71 });
+                const boxMat = new THREE.LineBasicMaterial({ color: 0xffff00 }); // Yellow highlight
                 this.highlight = new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), boxMat);
                 this.highlight.visible = false;
                 this.scene.add(this.highlight);
 
-                // WebGL Layer
                 const gl = this.renderer.getContext();
                 await gl.makeXRCompatible();
                 this.session.updateRenderState({ baseLayer: new XRWebGLLayer(this.session, gl) });
 
-                // Spaces
                 this.refSpace = await this.session.requestReferenceSpace('local');
                 this.viewerSpace = await this.session.requestReferenceSpace('viewer');
                 this.hitTestSource = await this.session.requestHitTestSource({ space: this.viewerSpace });
 
-                // Loop
                 this.session.requestAnimationFrame((t, f) => this.render(t, f));
             }
 
             onSelect(event) {
-                // Ignore select if gesture was just active (prevent placing object after pinch)
-                if (this.gestureState.active) return;
-                
-                // Don't trigger if tapping UI buttons (handled by 'interactive' class in CSS)
-                // but checking event.inputSource helps too.
-                
-                if (this.fpvMode) return;
+                // 1. CRITICAL: If interacting with UI (Button clicks), IGNORE completely.
+                if (this.isUIInteraction) {
+                    console.log("UI Blocked AR Touch");
+                    return;
+                }
+
+                // 2. If in Manipulation Mode (Scale/Rotate), Select is ignored (prevents accidental placement)
+                if (this.appState === 'MODE_SCALE' || this.appState === 'MODE_ROTATE' || this.appState === 'FPV') {
+                    return;
+                }
 
                 const frame = event.frame;
-                const session = event.frame.session;
                 const inputSource = event.inputSource;
 
-                // 1. Check if selecting existing object (Raycast)
+                // 3. Raycast to SELECT Object
                 if (inputSource.targetRaySpace) {
                     const pose = frame.getPose(inputSource.targetRaySpace, this.refSpace);
                     if (pose) {
@@ -411,174 +402,148 @@
                         const intersects = raycaster.intersectObjects(this.placedObjects, true);
 
                         if (intersects.length > 0) {
-                            // Find root object
                             let obj = intersects[0].object;
-                            while(obj.parent && !this.placedObjects.includes(obj)) {
-                                obj = obj.parent;
-                            }
+                            while(obj.parent && !this.placedObjects.includes(obj)) obj = obj.parent;
+                            
                             if (this.placedObjects.includes(obj)) {
                                 this.selectObject(obj);
-                                return; // Stop here, don't place new object
+                                return; // Stop here
                             }
                         }
                     }
                 }
 
-                // 2. If reticle visible & model loaded & nothing selected -> Place Object
-                if (this.reticle && this.reticle.visible && this.modelTemplate) {
-                    this.placeObject();
+                // 4. Place Object (Only if not selecting existing one)
+                if (this.reticle && this.reticle.visible && this.modelTemplate && !this.selectedObject) {
+                    const clone = this.modelTemplate.clone();
+                    clone.position.copy(this.reticle.position);
+                    this.scene.add(clone);
+                    this.placedObjects.push(clone);
+                    this.selectObject(clone);
                 } else if (this.selectedObject) {
-                    // Tap on empty space deselects
+                    // Tap empty space to Deselect
                     this.deselect();
                 }
             }
 
-            placeObject() {
-                const clone = this.modelTemplate.clone();
-                clone.position.copy(this.reticle.position);
-                this.scene.add(clone);
-                this.placedObjects.push(clone);
-                this.selectObject(clone);
-                
-                document.getElementById('toast').innerText = "Objek ditempatkan";
-            }
-
             selectObject(obj) {
                 this.selectedObject = obj;
-                this.updateSelectionBox();
+                this.updateBox();
                 
-                // Show UI
-                document.getElementById('action-bar').classList.add('visible');
-                document.getElementById('gesture-hint').style.display = 'block';
-                document.getElementById('toast').style.display = 'none';
+                // Show Menu
+                document.getElementById('action-bar').style.display = 'flex';
+                this.setMode('SELECTED');
             }
 
             deselect() {
                 this.selectedObject = null;
                 this.highlight.visible = false;
-                document.getElementById('action-bar').classList.remove('visible');
-                document.getElementById('gesture-hint').style.display = 'none';
-                document.getElementById('toast').style.display = 'block';
-                document.getElementById('toast').innerText = "Ketuk objek untuk edit";
+                document.getElementById('action-bar').style.display = 'none';
+                this.setMode('IDLE');
             }
 
-            updateSelectionBox() {
+            deleteObject() {
+                if (this.selectedObject) {
+                    this.scene.remove(this.selectedObject);
+                    // Remove from array correctly
+                    this.placedObjects = this.placedObjects.filter(o => o !== this.selectedObject);
+                    
+                    this.selectedObject = null;
+                    this.highlight.visible = false;
+                    document.getElementById('action-bar').style.display = 'none';
+                    this.setMode('IDLE');
+                    
+                    document.getElementById('toast').innerText = "Objek dihapus";
+                }
+            }
+
+            updateBox() {
                 if(!this.selectedObject) return;
                 const box = new THREE.Box3().setFromObject(this.selectedObject);
                 const size = new THREE.Vector3(); box.getSize(size);
                 const center = new THREE.Vector3(); box.getCenter(center);
                 this.highlight.scale.copy(size);
                 this.highlight.position.copy(center);
-                this.highlight.rotation.copy(this.selectedObject.rotation); // Sync rotation
+                this.highlight.rotation.copy(this.selectedObject.rotation);
                 this.highlight.visible = true;
             }
 
-            deleteObject() {
-                if(this.selectedObject) {
-                    this.scene.remove(this.selectedObject);
-                    this.placedObjects = this.placedObjects.filter(o => o !== this.selectedObject);
-                    this.deselect();
-                }
-            }
-
-            resetScene() {
-                this.placedObjects.forEach(o => this.scene.remove(o));
-                this.placedObjects = [];
-                this.deselect();
-            }
-
-            // --- FPV MODE ---
+            // --- FPV Logic ---
             enterFPV() {
                 if(!this.selectedObject) return;
-                this.fpvMode = true;
+                this.setMode('FPV');
                 this.fpvObject = this.selectedObject;
                 
-                // Scale up for immersion
-                this.savedTransform = { 
-                    s: this.fpvObject.scale.clone(),
-                    p: this.fpvObject.position.clone(),
-                    r: this.fpvObject.rotation.clone()
+                this.savedT = { 
+                    s: this.fpvObject.scale.clone(), 
+                    p: this.fpvObject.position.clone(), 
+                    r: this.fpvObject.rotation.clone() 
                 };
-                const bigScale = this.savedTransform.s.x * 20;
-                this.fpvObject.scale.set(bigScale, bigScale, bigScale);
+                const big = this.savedT.s.x * 20; 
+                this.fpvObject.scale.set(big, big, big);
 
-                // UI Switch
                 document.getElementById('overlay-container').style.display = 'none';
                 document.getElementById('fpv-ui').style.display = 'block';
 
-                // Init Joystick
                 this.joystick = nipplejs.create({
                     zone: document.getElementById('joystick-zone'),
                     mode: 'static', position: {left: '50%', top: '50%'}, color: 'white'
                 });
+                this.moveVec = {x:0, z:0};
                 this.joystick.on('move', (evt, data) => {
-                    if(data.vector) {
-                        this.moveVector.z = data.vector.y; // Forward/Back
-                        this.moveVector.x = data.vector.x; // Left/Right
-                    }
+                    if(data.vector) { this.moveVec.z = data.vector.y; this.moveVec.x = data.vector.x; }
                 });
-                this.joystick.on('end', () => this.moveVector = {x:0, z:0});
+                this.joystick.on('end', () => this.moveVec = {x:0, z:0});
             }
 
             exitFPV() {
-                this.fpvMode = false;
-                // Restore transform
                 if(this.fpvObject) {
-                    this.fpvObject.scale.copy(this.savedTransform.s);
-                    this.fpvObject.position.copy(this.savedTransform.p);
-                    this.fpvObject.rotation.copy(this.savedTransform.r);
+                    this.fpvObject.scale.copy(this.savedT.s);
+                    this.fpvObject.position.copy(this.savedT.p);
+                    this.fpvObject.rotation.copy(this.savedT.r);
                 }
-                
                 if(this.joystick) this.joystick.destroy();
-
                 document.getElementById('fpv-ui').style.display = 'none';
                 document.getElementById('overlay-container').style.display = 'flex';
+                this.setMode('SELECTED');
             }
 
-            // --- RENDER LOOP ---
-            render(time, frame) {
+            render(t, frame) {
                 this.session.requestAnimationFrame((t, f) => this.render(t, f));
                 const pose = frame.getViewerPose(this.refSpace);
 
                 if (pose) {
-                    // Hit Test
-                    if (!this.fpvMode && this.hitTestSource) {
-                        const results = frame.getHitTestResults(this.hitTestSource);
-                        if (results.length > 0) {
-                            const hitPose = results[0].getPose(this.refSpace);
+                    if (this.appState !== 'FPV' && this.hitTestSource) {
+                        const res = frame.getHitTestResults(this.hitTestSource);
+                        if (res.length > 0) {
+                            const hit = res[0].getPose(this.refSpace);
                             this.reticle.visible = true;
-                            this.reticle.position.set(hitPose.transform.position.x, hitPose.transform.position.y, hitPose.transform.position.z);
+                            this.reticle.position.copy(hit.transform.position);
                             this.reticle.updateMatrixWorld(true);
-                        } else {
-                            this.reticle.visible = false;
-                        }
+                        } else this.reticle.visible = false;
                     }
 
-                    // FPV Movement Logic
-                    if (this.fpvMode && this.fpvObject) {
+                    if (this.appState === 'FPV' && this.fpvObject) {
                         const view = pose.views[0];
-                        const camMat = new THREE.Matrix4().fromArray(view.transform.matrix);
-                        const fwd = new THREE.Vector3(0,0,-1).applyMatrix4(camMat); fwd.y=0; fwd.normalize();
-                        const right = new THREE.Vector3(1,0,0).applyMatrix4(camMat); right.y=0; right.normalize();
+                        const mat = new THREE.Matrix4().fromArray(view.transform.matrix);
+                        const fwd = new THREE.Vector3(0,0,-1).applyMatrix4(mat); fwd.y=0; fwd.normalize();
+                        const right = new THREE.Vector3(1,0,0).applyMatrix4(mat); right.y=0; right.normalize();
                         
-                        const speed = 0.05;
+                        const spd = 0.05;
                         const move = new THREE.Vector3();
-                        
-                        if(Math.abs(this.moveVector.z) > 0.1) move.add(fwd.multiplyScalar(this.moveVector.z * speed));
-                        if(Math.abs(this.moveVector.x) > 0.1) move.add(right.multiplyScalar(-this.moveVector.x * speed));
-                        move.y += this.verticalSpeed;
-
+                        if(Math.abs(this.moveVec.z)>0.1) move.add(fwd.multiplyScalar(this.moveVec.z * spd));
+                        if(Math.abs(this.moveVec.x)>0.1) move.add(right.multiplyScalar(-this.moveVec.x * spd));
+                        move.y += this.verticalSpeed || 0;
                         this.fpvObject.position.add(move);
                     }
 
-                    // Draw
                     const gl = this.renderer.getContext();
                     gl.bindFramebuffer(gl.FRAMEBUFFER, this.session.renderState.baseLayer.framebuffer);
                     this.renderer.clear();
                     
                     for (const view of pose.views) {
-                        const viewport = this.session.renderState.baseLayer.getViewport(view);
-                        this.renderer.setSize(viewport.width, viewport.height);
+                        const vp = this.session.renderState.baseLayer.getViewport(view);
+                        this.renderer.setSize(vp.width, vp.height);
                         this.camera.matrix.fromArray(view.transform.matrix);
                         this.camera.projectionMatrix.fromArray(view.projectionMatrix);
                         this.camera.updateMatrixWorld(true);
@@ -587,13 +552,19 @@
                 }
             }
 
+            resetScene() {
+                this.placedObjects.forEach(o => this.scene.remove(o));
+                this.placedObjects = [];
+                this.deselect();
+            }
+            
             endAR() {
                 this.session.end();
                 document.getElementById('start-screen').style.display = 'block';
             }
         }
 
-        window.onload = () => new App();
+        window.onload = () => new ARApp();
     </script>
 </body>
 </html>
