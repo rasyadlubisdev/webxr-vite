@@ -458,7 +458,10 @@ class ARObjectPlacement {
             { name: 'Astronaut', url: 'Astronaut.glb', icon: '🧑‍🚀' },
             { name: '3 Bedroom House', url: '3 Bedroom house.glb', icon: '🏡' },
             { name: 'Apartment Floor Plan', url: 'Apartment.glb', icon: '🏢' },
-            { name: 'Room', url: 'Room.glb', icon: '🚪' }
+            { name: 'Room', url: 'Room.glb', icon: '🚪' },
+            { name : "Hokage Room", url : "hokage_room_naruto.glb", icon: "🗻" },
+            { name : "Vianney House ", url : "vianney_house_2.glb", icon: "🏠" },
+            { name : "Infinits Park", url: "infinits.glb", icon: "🌳" },
         ];
 
         try {
