@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Nano Banana - Fixed Library</title>
+    <title>AR Nano Banana - Fixed Library Layer</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
     
     <style>
@@ -20,31 +20,31 @@
             -webkit-user-select: none; user-select: none;
         }
 
-        /* --- UI CONTAINER (Default: HIDDEN) --- */
+        /* START SCREEN */
+        #start-screen {
+            display: block; position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(30,30,30,0.9); padding: 30px; border-radius: 20px;
+            text-align: center; color: white; border: var(--glass-border);
+            pointer-events: auto; z-index: 200; width: 80%; max-width: 300px;
+        }
+
+        /* MAIN AR OVERLAY CONTAINER */
+        /* Penting: Semua UI AR harus ada di dalam div ini */
         #overlay-container {
-            display: none; /* FIX: Sembunyikan saat awal */
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none; z-index: 100;
             flex-direction: column; justify-content: space-between;
         }
 
         .interactive { pointer-events: auto !important; }
 
-        /* --- START SCREEN --- */
-        #start-screen {
-            position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(30,30,30,0.9); padding: 30px; border-radius: 20px;
-            text-align: center; color: white; border: var(--glass-border);
-            pointer-events: auto; z-index: 200; width: 80%; max-width: 300px;
-            display: block; /* FIX: Tampil saat awal */
-        }
         #btn-start {
             margin-top: 20px; padding: 12px 30px; background: var(--accent);
             border: none; border-radius: 50px; color: white; font-weight: bold;
         }
 
-        /* HUD Buttons */
+        /* HUD Styles */
         .icon-btn {
             width: 44px; height: 44px; border-radius: 50%;
             background: rgba(50,50,50,0.8); border: var(--glass-border);
@@ -53,20 +53,17 @@
         }
         .red { color: #ff6b6b; background: rgba(80,0,0,0.6); }
 
-        #hud-top { padding: 20px; display: flex; justify-content: flex-end; }
-        #hud-bottom { padding: 20px; padding-bottom: 40px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        #hud-top { padding: 20px; display: flex; justify-content: flex-end; pointer-events: none; }
+        #hud-bottom { padding: 20px; padding-bottom: 40px; display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
 
         #toast {
             background: rgba(0,0,0,0.6); color: white; padding: 8px 16px;
             border-radius: 20px; font-size: 13px; margin-bottom: 10px; text-align: center;
-            backdrop-filter: blur(4px);
+            backdrop-filter: blur(4px); transition: opacity 0.3s;
         }
 
         /* IDLE MENU */
-        #idle-menu {
-            display: flex; gap: 10px; pointer-events: none;
-            transition: opacity 0.3s;
-        }
+        #idle-menu { display: flex; gap: 10px; pointer-events: none; transition: opacity 0.3s; }
         .btn-main {
             padding: 12px 24px; border-radius: 25px; border: var(--glass-border);
             background: var(--glass-bg); color: white; font-weight: 600;
@@ -74,50 +71,38 @@
         }
         .btn-main:active { transform: scale(0.95); }
 
-        /* LIBRARY DRAWER */
+        /* LIBRARY DRAWER (Sekarang child dari overlay-container) */
         #library-drawer {
             position: absolute; bottom: 0; left: 0; width: 100%;
             background: rgba(20,20,20,0.95);
-            border-top: var(--glass-border);
-            border-radius: 20px 20px 0 0;
+            border-top: var(--glass-border); border-radius: 20px 20px 0 0;
             padding: 20px; box-sizing: border-box;
-            transform: translateY(110%); /* Hidden by default */
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            pointer-events: auto; z-index: 150;
-            display: flex; flex-direction: column; gap: 15px;
+            transform: translateY(110%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: auto !important; /* WAJIB AUTO AGAR BISA DIKLIK */
+            z-index: 150; display: flex; flex-direction: column; gap: 15px;
         }
         #library-drawer.open { transform: translateY(0); }
-        
         .drawer-header { display: flex; justify-content: space-between; align-items: center; color: white; }
-        .drawer-header h3 { margin: 0; font-size: 16px; }
-
-        .model-list {
-            display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px;
-            max-height: 200px; overflow-y: auto;
-        }
-
+        .model-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; max-height: 200px; overflow-y: auto; }
         .model-card {
-            background: rgba(255,255,255,0.05); border-radius: 12px;
-            padding: 10px; text-align: center; cursor: pointer;
-            border: 1px solid transparent; transition: all 0.2s;
+            background: rgba(255,255,255,0.05); border-radius: 12px; padding: 10px;
+            text-align: center; cursor: pointer; border: 1px solid transparent; transition: all 0.2s;
         }
         .model-card.active { border-color: var(--accent); background: var(--active-item); }
-        .model-icon { font-size: 24px; margin-bottom: 5px; display: block; }
+        .model-icon { font-size: 24px; display: block; margin-bottom: 5px; }
         .model-name { font-size: 11px; color: #ccc; }
 
         /* Action Bar */
         #action-bar {
             display: none; flex-wrap: wrap; justify-content: center; gap: 10px;
             background: var(--glass-bg); padding: 12px 20px; border-radius: 24px;
-            border: var(--glass-border); backdrop-filter: blur(12px);
-            animation: slideUp 0.3s;
+            border: var(--glass-border); backdrop-filter: blur(12px); animation: slideUp 0.3s;
         }
         @keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
         .pill-btn {
-            padding: 10px 18px; border-radius: 20px; border: none;
-            font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px;
-            background: rgba(255,255,255,0.1); color: white;
+            padding: 10px 18px; border-radius: 20px; border: none; font-weight: 600; font-size: 13px;
+            display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.1); color: white;
         }
         .btn-delete { background: rgba(231, 76, 60, 0.2); color: #ff8787; border: 1px solid rgba(231, 76, 60, 0.5); }
         .btn-fpv { background: rgba(46, 204, 113, 0.2); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.5); }
@@ -142,6 +127,7 @@
             <button id="btn-reset" class="icon-btn interactive">↺</button>
             <button id="btn-exit" class="icon-btn red interactive">✕</button>
         </div>
+        
         <div style="flex:1"></div>
         
         <div id="hud-bottom">
@@ -158,15 +144,14 @@
                 <button id="btn-delete" class="pill-btn btn-delete">Hapus</button>
             </div>
         </div>
-    </div>
 
-    <div id="library-drawer">
-        <div class="drawer-header">
-            <h3>Pilih Aset 3D</h3>
-            <button id="btn-close-lib" class="icon-btn" style="width:30px; height:30px; font-size:14px;">✕</button>
-        </div>
-        <div class="model-list" id="model-list-container">
+        <div id="library-drawer">
+            <div class="drawer-header">
+                <h3>Pilih Aset 3D</h3>
+                <button id="btn-close-lib" class="icon-btn" style="width:30px; height:30px; font-size:14px;">✕</button>
             </div>
+            <div class="model-list" id="model-list-container"></div>
+        </div>
     </div>
 
     <div id="fpv-ui">
@@ -187,10 +172,10 @@
     <script src="https://unpkg.com/three@0.126.0/examples/js/loaders/GLTFLoader.js"></script>
 
     <script>
-        // DATA MODEL ANDA
+        // --- KONFIGURASI ASET ---
         const ASSETS = [
             { id: 1, name: "Tower House", file: "3d_assets/tower_house_design.glb", icon: "🏠" },
-            { id: 2, name: "Model Lain", file: "3d_assets/model_lain.glb", icon: "🏢" } // Sesuaikan path
+            { id: 2, name: "Model Kedua", file: "3d_assets/model_kedua.glb", icon: "🏢" }
         ];
 
         class ARApp {
@@ -199,14 +184,11 @@
                 this.selectedObject = null;
                 this.reticle = null;
                 this.modelTemplate = null;
-                this.currentModelUrl = ASSETS[0].file;
                 this.activeAssetId = ASSETS[0].id;
-                
+                this.currentModelUrl = ASSETS[0].file;
                 this.fpvMode = false;
                 this.isUIInteraction = false;
                 this.isDragging = false;
-                
-                // Gestures
                 this.touchStartX = 0;
                 this.initialRotation = 0;
                 this.startDist = 0;
@@ -281,22 +263,19 @@
             selectModelFromLibrary(asset) {
                 this.activeAssetId = asset.id;
                 this.currentModelUrl = asset.file;
-                this.renderLibrary(); // Re-render for active border
-                
+                this.renderLibrary();
                 document.getElementById('toast').innerText = `Memuat ${asset.name}...`;
-                
                 const loader = new THREE.GLTFLoader();
                 loader.load(this.currentModelUrl, (gltf) => {
                     this.modelTemplate = gltf.scene;
-                    document.getElementById('toast').innerText = `${asset.name} Siap! Ketuk lantai.`;
+                    document.getElementById('toast').innerText = `${asset.name} Siap!`;
                     document.getElementById('library-drawer').classList.remove('open');
                 }, undefined, (err) => {
-                    document.getElementById('toast').innerText = "Gagal memuat model!";
+                    document.getElementById('toast').innerText = `Gagal: ${asset.file} tidak ditemukan`;
                     console.error(err);
                 });
             }
 
-            // GESTURES
             onTouchStart(e) {
                 if (!this.selectedObject || this.fpvMode) return;
                 this.isDragging = false; 
@@ -314,7 +293,6 @@
 
             onTouchMove(e) {
                 if (!this.selectedObject || this.fpvMode) return;
-                
                 if (e.touches.length === 2) {
                     e.preventDefault(); 
                     this.isDragging = true; 
@@ -328,8 +306,7 @@
                         this.selectedObject.scale.set(newScale, newScale, newScale);
                         this.updateBox();
                     }
-                }
-                else if (e.touches.length === 1) {
+                } else if (e.touches.length === 1) {
                     const dx = e.touches[0].pageX - this.touchStartX;
                     if (Math.abs(dx) > 10) {
                         e.preventDefault();
@@ -342,7 +319,6 @@
             }
             onTouchEnd() { setTimeout(() => { this.isDragging = false; }, 100); }
 
-            // AR CORE
             async checkXR() {
                 if (navigator.xr && await navigator.xr.isSessionSupported('immersive-ar')) {
                     document.getElementById('status-text').innerText = "Siap.";
@@ -351,22 +327,17 @@
             }
 
             async startAR() {
-                // VISIBILITY SWAP: Start Screen HIDDEN, Overlay SHOWN
                 document.getElementById('start-screen').style.display = 'none';
                 document.getElementById('overlay-container').style.display = 'flex';
-
                 this.session = await navigator.xr.requestSession('immersive-ar', {
                     requiredFeatures: ['hit-test'], optionalFeatures: ['dom-overlay'],
                     domOverlay: { root: document.getElementById('overlay-container') }
                 });
-
                 this.renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
                 this.renderer.autoClear = false;
                 this.renderer.outputEncoding = THREE.sRGBEncoding;
-
                 this.session.addEventListener('select', (e) => this.onSelect(e));
                 this.session.addEventListener('end', () => this.endAR());
-
                 this.scene = new THREE.Scene();
                 const light = new THREE.DirectionalLight(0xffffff, 1);
                 light.position.set(5, 10, 7);
@@ -374,40 +345,31 @@
                 this.scene.add(new THREE.AmbientLight(0xffffff, 0.5));
                 this.camera = new THREE.PerspectiveCamera();
                 this.camera.matrixAutoUpdate = false;
-
                 const loader = new THREE.GLTFLoader();
                 loader.load('https://immersive-web.github.io/webxr-samples/media/gltf/reticle/reticle.gltf', (gltf) => {
                     this.reticle = gltf.scene;
                     this.reticle.visible = false;
                     this.scene.add(this.reticle);
                 });
-                
-                // Load First Model
-                this.selectModelFromLibrary(ASSETS[0]); 
-
+                this.selectModelFromLibrary(ASSETS[0]);
                 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
                 const boxMat = new THREE.LineBasicMaterial({ color: 0xffff00 });
                 this.highlight = new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), boxMat);
                 this.highlight.visible = false;
                 this.scene.add(this.highlight);
-
                 const gl = this.renderer.getContext();
                 await gl.makeXRCompatible();
                 this.session.updateRenderState({ baseLayer: new XRWebGLLayer(this.session, gl) });
-
                 this.refSpace = await this.session.requestReferenceSpace('local');
                 this.viewerSpace = await this.session.requestReferenceSpace('viewer');
                 this.hitTestSource = await this.session.requestHitTestSource({ space: this.viewerSpace });
-
                 this.session.requestAnimationFrame((t, f) => this.render(t, f));
             }
 
             onSelect(event) {
                 if (this.isUIInteraction || this.fpvMode || this.isDragging) return;
-
                 const frame = event.frame;
                 const inputSource = event.inputSource;
-
                 if (inputSource.targetRaySpace) {
                     const pose = frame.getPose(inputSource.targetRaySpace, this.refSpace);
                     if (pose) {
@@ -415,7 +377,6 @@
                         const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(new THREE.Quaternion(pose.transform.orientation.x, pose.transform.orientation.y, pose.transform.orientation.z, pose.transform.orientation.w));
                         const raycaster = new THREE.Raycaster(origin, direction);
                         const intersects = raycaster.intersectObjects(this.placedObjects, true);
-
                         if (intersects.length > 0) {
                             let obj = intersects[0].object;
                             while(obj.parent && !this.placedObjects.includes(obj)) obj = obj.parent;
@@ -426,7 +387,6 @@
                         }
                     }
                 }
-
                 if (this.reticle && this.reticle.visible && this.modelTemplate && !this.selectedObject) {
                     const clone = this.modelTemplate.clone();
                     clone.position.copy(this.reticle.position);
@@ -481,10 +441,8 @@
                 this.savedT = { s: this.fpvObject.scale.clone(), p: this.fpvObject.position.clone(), r: this.fpvObject.rotation.clone() };
                 const big = this.savedT.s.x * 20; 
                 this.fpvObject.scale.set(big, big, big);
-
                 document.getElementById('overlay-container').style.display = 'none';
                 document.getElementById('fpv-ui').style.display = 'block';
-
                 this.joystick = nipplejs.create({ zone: document.getElementById('joystick-zone'), mode: 'static', position: {left: '50%', top: '50%'}, color: 'white' });
                 this.moveVec = {x:0, z:0};
                 this.joystick.on('move', (evt, data) => { if(data.vector) { this.moveVec.z = data.vector.y; this.moveVec.x = data.vector.x; } });
@@ -544,7 +502,6 @@
 
             endAR() {
                 this.session.end();
-                // VISIBILITY SWAP: Start Screen SHOWN, Overlay HIDDEN
                 document.getElementById('start-screen').style.display = 'block';
                 document.getElementById('overlay-container').style.display = 'none';
             }
