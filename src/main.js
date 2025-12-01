@@ -1,6 +1,74 @@
 import { fal } from "https://esm.sh/@fal-ai/client@latest";
 
 // ============================================
+// INDEXEDDB HELPER FOR BLOB STORAGE
+// ============================================
+
+class ModelStorage {
+    constructor() {
+        this.dbName = 'ARModelsDB';
+        this.storeName = 'models';
+        this.db = null;
+    }
+
+    async init() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(this.dbName, 1);
+            
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => {
+                this.db = request.result;
+                resolve();
+            };
+            
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains(this.storeName)) {
+                    db.createObjectStore(this.storeName, { keyPath: 'id' });
+                }
+            };
+        });
+    }
+
+    async saveModel(id, blob, metadata) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([this.storeName], 'readwrite');
+            const store = transaction.objectStore(this.storeName);
+            const data = { id, blob, metadata };
+            const request = store.put(data);
+            
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async getModel(id) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([this.storeName], 'readonly');
+            const store = transaction.objectStore(this.storeName);
+            const request = store.get(id);
+            
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async getAllModels() {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([this.storeName], 'readonly');
+            const store = transaction.objectStore(this.storeName);
+            const request = store.getAll();
+            
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+}
+
+// Global storage instance
+const modelStorage = new ModelStorage();
+
+// ============================================
 // GENERATION SCREEN LOGIC
 // ============================================
 
@@ -29,7 +97,15 @@ class ModelGenerator {
         this.init();
     }
 
-    init() {
+    async init() {
+        // Initialize IndexedDB
+        try {
+            await modelStorage.init();
+            this.log('✓ Storage initialized', 'success');
+        } catch (error) {
+            this.log('⚠ Storage init failed: ' + error.message, 'error');
+        }
+
         // Setup Fal.ai with API Key from environment
         const apiKey = import.meta.env.VITE_FAL_API_KEY;
         if (apiKey && apiKey !== 'your_fal_api_key_here') {
@@ -154,76 +230,153 @@ class ModelGenerator {
 
     async loadZipToViewer(zipUrl) {
         try {
-            const response = await fetch(zipUrl);
-            if (!response.ok) throw new Error("Failed to download ZIP file");
+            this.log("Downloading ZIP file...");
             
+            // Fetch with proper error handling
+            const response = await fetch(zipUrl, {
+                mode: 'cors',
+                credentials: 'omit'
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            this.log("✓ ZIP downloaded, extracting...");
             const blob = await response.blob();
+            this.log(`✓ ZIP size: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
+            
             const zip = await JSZip.loadAsync(blob);
+            this.log(`✓ ZIP loaded, scanning for 3D files...`);
             
             let modelFile = null;
+            const fileList = [];
             
             // Find 3D file inside ZIP
             zip.forEach((relativePath, zipEntry) => {
+                fileList.push(zipEntry.name);
                 if (zipEntry.name.match(/\.(glb|gltf)$/i) && !modelFile) {
                     modelFile = zipEntry;
                 }
             });
 
+            this.log(`Found ${fileList.length} files in ZIP`);
+            console.log('ZIP contents:', fileList);
+
             if (modelFile) {
                 this.log(`✓ Found model: ${modelFile.name}`, 'success');
                 
+                // Extract as blob
                 const modelBlob = await modelFile.async("blob");
+                this.log(`✓ Model extracted: ${(modelBlob.size / 1024).toFixed(2)} KB`);
+                
+                // Create blob URL
                 const modelUrl = URL.createObjectURL(modelBlob);
                 
-                // Store blob URL for later use
+                // Store complete data for later use
+                this.generatedModelData.modelBlob = modelBlob;
                 this.generatedModelData.blobUrl = modelUrl;
                 this.generatedModelData.fileName = modelFile.name;
+                
+                // Set to viewer with error handling
+                this.els.modelViewer.addEventListener('load', () => {
+                    this.log("✓ Preview loaded successfully!", "success");
+                }, { once: true });
+                
+                this.els.modelViewer.addEventListener('error', (e) => {
+                    this.log("⚠ Viewer error: " + e.message, 'error');
+                    console.error('Model viewer error:', e);
+                }, { once: true });
                 
                 this.els.modelViewer.src = modelUrl;
                 this.els.viewerPlaceholder.classList.add('hidden');
                 this.els.modelViewer.classList.remove('hidden');
                 
-                this.log("✓ Preview loaded!", "success");
             } else {
-                this.log("⚠ No compatible 3D file found in ZIP.", 'error');
-                this.log("You can still download the ZIP manually.");
+                this.log("⚠ No GLB/GLTF file found in ZIP.", 'error');
+                this.log("Available files: " + fileList.join(', '), 'error');
+                this.log("You can still download and save the model.");
+                
+                // Still allow saving even without preview
+                // Store the entire ZIP for later conversion
+                this.generatedModelData.zipBlob = blob;
             }
 
         } catch (err) {
-            this.log("⚠ Could not preview 3D model.", 'error');
-            console.error(err);
+            this.log(`✗ Preview failed: ${err.message}`, 'error');
+            console.error('Full error:', err);
+            
+            if (err.message.includes('CORS')) {
+                this.log("CORS policy blocked preview", 'error');
+                this.log("The model can still be downloaded & saved", 'info');
+            } else if (err.message.includes('HTTP')) {
+                this.log("Network error - check connection", 'error');
+            }
+            
+            // Allow download even if preview fails
+            this.log("Download is still available below", 'info');
         }
     }
 
     async saveToLibraryAndStartAR() {
-        if (!this.generatedModelData || !this.generatedModelData.blobUrl) {
+        if (!this.generatedModelData) {
             alert("No model to save. Please generate a model first.");
+            return;
+        }
+
+        // Check if we have the model blob
+        if (!this.generatedModelData.modelBlob && !this.generatedModelData.zipBlob) {
+            alert("Model data not available. Please try downloading and generating again.");
             return;
         }
 
         this.log("Saving model to library...");
 
-        // Save to localStorage for persistence
-        const savedModels = JSON.parse(localStorage.getItem('generatedModels') || '[]');
-        
-        const modelEntry = {
-            name: `Generated ${new Date().toLocaleString()}`,
-            url: this.generatedModelData.blobUrl, // Blob URL for immediate use
-            zipUrl: this.generatedModelData.zipUrl, // Original URL for download
-            icon: '✨',
-            isGenerated: true,
-            timestamp: this.generatedModelData.timestamp
-        };
+        try {
+            // Generate unique ID
+            const modelId = `generated_${Date.now()}`;
+            const modelName = `Generated ${new Date().toLocaleString('id-ID', { 
+                day: '2-digit', 
+                month: 'short', 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            })}`;
 
-        savedModels.push(modelEntry);
-        localStorage.setItem('generatedModels', JSON.stringify(savedModels));
+            // Prepare metadata
+            const metadata = {
+                id: modelId,
+                name: modelName,
+                icon: '✨',
+                isGenerated: true,
+                timestamp: this.generatedModelData.timestamp,
+                imageName: this.generatedModelData.imageName,
+                fileName: this.generatedModelData.fileName,
+                zipUrl: this.generatedModelData.zipUrl
+            };
 
-        this.log("✓ Model saved to library!", 'success');
-        
-        // Proceed to AR
-        setTimeout(() => {
-            this.skipToAR();
-        }, 500);
+            // Save blob to IndexedDB
+            const blobToSave = this.generatedModelData.modelBlob || this.generatedModelData.zipBlob;
+            await modelStorage.saveModel(modelId, blobToSave, metadata);
+
+            this.log(`✓ Model saved: ${modelName}`, 'success');
+            
+            // Also save reference to localStorage for quick lookup
+            const savedRefs = JSON.parse(localStorage.getItem('generatedModelRefs') || '[]');
+            savedRefs.push(metadata);
+            localStorage.setItem('generatedModelRefs', JSON.stringify(savedRefs));
+
+            this.log("✓ Model ready for AR!", 'success');
+            
+            // Proceed to AR
+            setTimeout(() => {
+                this.skipToAR();
+            }, 500);
+
+        } catch (error) {
+            console.error('Save error:', error);
+            this.log(`✗ Save failed: ${error.message}`, 'error');
+            alert('Failed to save model. Check console for details.');
+        }
     }
 
     skipToAR() {
@@ -256,8 +409,8 @@ class ARObjectPlacement {
         this.reticle = null;
         this.arObject = null;
         
-        // Load default models + generated models
-        this.availableModels = this.loadAvailableModels();
+        // Will be loaded asynchronously in init()
+        this.availableModels = [];
         this.activeModelIndex = 0;
 
         this.placedObjects = [];
@@ -297,7 +450,7 @@ class ARObjectPlacement {
         this.init();
     }
 
-    loadAvailableModels() {
+    async loadAvailableModels() {
         // Default models
         const defaultModels = [
             { name: 'Tower House', url: 'tower_house_design.glb', icon: '🏠' },
@@ -308,16 +461,47 @@ class ARObjectPlacement {
             { name: 'Room', url: 'Room.glb', icon: '🚪' }
         ];
 
-        // Load generated models from localStorage
-        const savedModels = JSON.parse(localStorage.getItem('generatedModels') || '[]');
-        
-        // Combine both
-        return [...defaultModels, ...savedModels];
+        try {
+            // Load generated model references
+            const savedRefs = JSON.parse(localStorage.getItem('generatedModelRefs') || '[]');
+            
+            // Load actual blobs from IndexedDB
+            const generatedModels = [];
+            for (const ref of savedRefs) {
+                try {
+                    const modelData = await modelStorage.getModel(ref.id);
+                    if (modelData && modelData.blob) {
+                        // Create blob URL from stored blob
+                        const blobUrl = URL.createObjectURL(modelData.blob);
+                        generatedModels.push({
+                            ...ref,
+                            url: blobUrl,
+                            isGenerated: true
+                        });
+                    }
+                } catch (err) {
+                    console.error(`Failed to load model ${ref.id}:`, err);
+                }
+            }
+            
+            console.log(`Loaded ${generatedModels.length} generated models`);
+            
+            // Combine both
+            return [...generatedModels, ...defaultModels];
+            
+        } catch (error) {
+            console.error('Error loading models:', error);
+            return defaultModels;
+        }
     }
     
     async init() {
         this.initUI();
         await this.checkWebXRSupport();
+        
+        // Load models asynchronously (includes generated models from IndexedDB)
+        this.availableModels = await this.loadAvailableModels();
+        
         await this.loadModels();
         this.renderLibrary();
         this.createSelectionHighlight();
