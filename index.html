@@ -3,10 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Nano Banana - Fixed Library Layer</title>
+    <title>AR Object Placement - 3D Generator Integration</title>
+    
+    <!-- Dependencies -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        
         :root {
             --glass-bg: rgba(20, 20, 20, 0.85);
             --glass-border: 1px solid rgba(255, 255, 255, 0.15);
@@ -15,503 +22,660 @@
         }
 
         body {
-            margin: 0; overflow: hidden; background-color: #111;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0; overflow: hidden; background-color: #0f172a;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             -webkit-user-select: none; user-select: none;
+            color: #e2e8f0;
+        }
+
+        /* GENERATION SCREEN */
+        #generation-screen {
+            display: block; 
+            position: absolute; 
+            top: 0; left: 0; 
+            width: 100%; 
+            height: 100%;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            overflow-y: auto;
+            z-index: 300;
+            padding: 20px;
+        }
+
+        .gen-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .gen-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .gen-title {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .gen-subtitle {
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+
+        .gen-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        @media (min-width: 768px) {
+            .gen-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        .gen-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            padding: 20px;
+        }
+
+        .gen-section-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #cbd5e1;
+            margin-bottom: 12px;
+        }
+
+        .drop-zone {
+            border: 2px dashed #475569;
+            border-radius: 0.75rem;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            min-height: 200px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .drop-zone:hover {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.05);
+        }
+
+        .drop-zone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .drop-zone-icon {
+            font-size: 3rem;
+            color: #64748b;
+            margin-bottom: 10px;
+        }
+
+        .drop-zone-text {
+            color: #94a3b8;
+            font-size: 0.875rem;
+        }
+
+        #gen-preview-image {
+            max-height: 250px;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        .gen-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            font-weight: 600;
+            padding: 14px 20px;
+            border-radius: 0.75rem;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
+        }
+
+        .gen-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(59, 130, 246, 0.4);
+        }
+
+        .gen-btn:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .gen-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .gen-btn-secondary {
+            background: rgba(100, 116, 139, 0.2);
+            box-shadow: none;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .gen-logs {
+            background: #0f172a;
+            border-radius: 0.5rem;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.75rem;
+            color: #22c55e;
+            height: 150px;
+            overflow-y: auto;
+            border: 1px solid #1e293b;
+        }
+
+        .gen-log-line {
+            margin-bottom: 4px;
+        }
+
+        .gen-log-error {
+            color: #ef4444;
+        }
+
+        .gen-log-success {
+            color: #60a5fa;
+        }
+
+        model-viewer {
+            width: 100%;
+            height: 350px;
+            background: #1e293b;
+            border-radius: 0.75rem;
+            --poster-color: transparent;
+        }
+
+        .gen-loading-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(8px);
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.75rem;
+        }
+
+        .gen-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(59, 130, 246, 0.2);
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .gen-loading-text {
+            color: #60a5fa;
+            font-weight: 600;
+            margin-top: 15px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
 
         /* START SCREEN */
         #start-screen {
-            display: block; position: absolute; top: 50%; left: 50%;
+            display: none; 
+            position: absolute; 
+            top: 50%; 
+            left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(30,30,30,0.9); padding: 30px; border-radius: 20px;
-            text-align: center; color: white; border: var(--glass-border);
-            pointer-events: auto; z-index: 200; width: 80%; max-width: 300px;
+            background: rgba(30,30,30,0.9); 
+            padding: 30px; 
+            border-radius: 20px;
+            text-align: center; 
+            color: white; 
+            border: var(--glass-border);
+            pointer-events: auto; 
+            z-index: 200; 
+            width: 80%; 
+            max-width: 300px;
         }
 
-        /* MAIN AR OVERLAY CONTAINER */
-        /* Penting: Semua UI AR harus ada di dalam div ini */
-        #overlay-container {
-            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; z-index: 100;
-            flex-direction: column; justify-content: space-between;
+        /* AR DOM OVERLAY ROOT */
+        #ar-root {
+            display: none; 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%;
+            pointer-events: none; 
+            z-index: 100;
+        }
+
+        /* STANDARD UI CONTAINER */
+        #standard-ui {
+            display: flex; 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%;
+            flex-direction: column; 
+            justify-content: space-between; 
+            pointer-events: none;
         }
 
         .interactive { pointer-events: auto !important; }
 
         #btn-start {
-            margin-top: 20px; padding: 12px 30px; background: var(--accent);
-            border: none; border-radius: 50px; color: white; font-weight: bold;
+            margin-top: 20px; 
+            padding: 12px 30px; 
+            background: var(--accent);
+            border: none; 
+            border-radius: 50px; 
+            color: white; 
+            font-weight: bold;
         }
+        #btn-start:disabled { background: #555; color: #888; }
 
         /* HUD Styles */
         .icon-btn {
-            width: 44px; height: 44px; border-radius: 50%;
-            background: rgba(50,50,50,0.8); border: var(--glass-border);
-            color: white; font-size: 18px; display: flex; align-items: center; justify-content: center;
-            backdrop-filter: blur(10px); margin-left: 10px;
+            width: 44px; 
+            height: 44px; 
+            border-radius: 50%;
+            background: rgba(50,50,50,0.8); 
+            border: var(--glass-border);
+            color: white; 
+            font-size: 18px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            backdrop-filter: blur(10px); 
+            margin-left: 10px;
         }
         .red { color: #ff6b6b; background: rgba(80,0,0,0.6); }
 
-        #hud-top { padding: 20px; display: flex; justify-content: flex-end; pointer-events: none; }
-        #hud-bottom { padding: 20px; padding-bottom: 40px; display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
+        #hud-top { 
+            padding: 20px; 
+            display: flex; 
+            justify-content: flex-end; 
+            pointer-events: none; 
+        }
+        #hud-bottom { 
+            padding: 20px; 
+            padding-bottom: 40px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            gap: 10px; 
+            pointer-events: none; 
+        }
 
         #toast {
-            background: rgba(0,0,0,0.6); color: white; padding: 8px 16px;
-            border-radius: 20px; font-size: 13px; margin-bottom: 10px; text-align: center;
-            backdrop-filter: blur(4px); transition: opacity 0.3s;
+            background: rgba(0,0,0,0.6); 
+            color: white; 
+            padding: 8px 16px;
+            border-radius: 20px; 
+            font-size: 13px; 
+            margin-bottom: 10px; 
+            text-align: center;
+            backdrop-filter: blur(4px); 
+            transition: opacity 0.3s;
         }
 
         /* IDLE MENU */
-        #idle-menu { display: flex; gap: 10px; pointer-events: none; transition: opacity 0.3s; }
+        #idle-menu { 
+            display: flex; 
+            gap: 10px; 
+            pointer-events: none; 
+            transition: opacity 0.3s; 
+        }
         .btn-main {
-            padding: 12px 24px; border-radius: 25px; border: var(--glass-border);
-            background: var(--glass-bg); color: white; font-weight: 600;
-            backdrop-filter: blur(12px); display: flex; align-items: center; gap: 8px;
+            padding: 12px 24px; 
+            border-radius: 25px; 
+            border: var(--glass-border);
+            background: var(--glass-bg); 
+            color: white; 
+            font-weight: 600;
+            backdrop-filter: blur(12px); 
+            display: flex; 
+            align-items: center; 
+            gap: 8px;
         }
         .btn-main:active { transform: scale(0.95); }
 
-        /* LIBRARY DRAWER (Sekarang child dari overlay-container) */
+        /* LIBRARY DRAWER */
         #library-drawer {
-            position: absolute; bottom: 0; left: 0; width: 100%;
+            position: absolute; 
+            bottom: 0; 
+            left: 0; 
+            width: 100%;
             background: rgba(20,20,20,0.95);
-            border-top: var(--glass-border); border-radius: 20px 20px 0 0;
-            padding: 20px; box-sizing: border-box;
-            transform: translateY(110%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            pointer-events: auto !important; /* WAJIB AUTO AGAR BISA DIKLIK */
-            z-index: 150; display: flex; flex-direction: column; gap: 15px;
+            border-top: var(--glass-border); 
+            border-radius: 20px 20px 0 0;
+            padding: 20px; 
+            box-sizing: border-box;
+            transform: translateY(110%); 
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: auto !important;
+            z-index: 150; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 15px;
         }
         #library-drawer.open { transform: translateY(0); }
-        .drawer-header { display: flex; justify-content: space-between; align-items: center; color: white; }
-        .model-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; max-height: 200px; overflow-y: auto; }
-        .model-card {
-            background: rgba(255,255,255,0.05); border-radius: 12px; padding: 10px;
-            text-align: center; cursor: pointer; border: 1px solid transparent; transition: all 0.2s;
+        .drawer-header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            color: white; 
         }
-        .model-card.active { border-color: var(--accent); background: var(--active-item); }
-        .model-icon { font-size: 24px; display: block; margin-bottom: 5px; }
-        .model-name { font-size: 11px; color: #ccc; }
+        .model-list { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); 
+            gap: 10px; 
+            max-height: 200px; 
+            overflow-y: auto; 
+        }
+        .model-card {
+            background: rgba(255,255,255,0.05); 
+            border-radius: 12px; 
+            padding: 10px;
+            text-align: center; 
+            cursor: pointer; 
+            border: 1px solid transparent; 
+            transition: all 0.2s;
+        }
+        .model-card.active { 
+            border-color: var(--accent); 
+            background: var(--active-item); 
+        }
+        .model-icon { 
+            font-size: 24px; 
+            display: block; 
+            margin-bottom: 5px; 
+        }
+        .model-name { 
+            font-size: 11px; 
+            color: #ccc; 
+        }
 
         /* Action Bar */
         #action-bar {
-            display: none; flex-wrap: wrap; justify-content: center; gap: 10px;
-            background: var(--glass-bg); padding: 12px 20px; border-radius: 24px;
-            border: var(--glass-border); backdrop-filter: blur(12px); animation: slideUp 0.3s;
+            display: none; 
+            flex-wrap: wrap; 
+            justify-content: center; 
+            gap: 10px;
+            background: var(--glass-bg); 
+            padding: 12px 20px; 
+            border-radius: 24px;
+            border: var(--glass-border); 
+            backdrop-filter: blur(12px); 
+            animation: slideUp 0.3s;
         }
-        @keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes slideUp { 
+            from { transform: translateY(50px); opacity: 0; } 
+            to { transform: translateY(0); opacity: 1; } 
+        }
 
         .pill-btn {
-            padding: 10px 18px; border-radius: 20px; border: none; font-weight: 600; font-size: 13px;
-            display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.1); color: white;
+            padding: 10px 18px; 
+            border-radius: 20px; 
+            border: none; 
+            font-weight: 600; 
+            font-size: 13px;
+            display: flex; 
+            align-items: center; 
+            gap: 6px; 
+            background: rgba(255,255,255,0.1); 
+            color: white;
         }
-        .btn-delete { background: rgba(231, 76, 60, 0.2); color: #ff8787; border: 1px solid rgba(231, 76, 60, 0.5); }
-        .btn-fpv { background: rgba(46, 204, 113, 0.2); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.5); }
+        .btn-delete { 
+            background: rgba(231, 76, 60, 0.2); 
+            color: #ff8787; 
+            border: 1px solid rgba(231, 76, 60, 0.5); 
+        }
+        .btn-fpv { 
+            background: rgba(46, 204, 113, 0.2); 
+            color: #2ecc71; 
+            border: 1px solid rgba(46, 204, 113, 0.5); 
+        }
 
         /* FPV UI */
-        #fpv-ui { display: none; position: absolute; top:0; left:0; width:100%; height:100%; pointer-events: none; z-index: 150; }
-        #joystick-zone { position: absolute; bottom: 40px; left: 40px; width: 120px; height: 120px; pointer-events: auto; }
-        #elevation-controls { position: absolute; bottom: 50px; right: 30px; display: flex; flex-direction: column; gap: 15px; pointer-events: auto; }
-        .circle-big { width: 60px; height: 60px; font-size: 24px; background: rgba(255,255,255,0.1); }
+        #fpv-ui { 
+            display: none; 
+            position: absolute; 
+            top:0; 
+            left:0; 
+            width:100%; 
+            height:100%; 
+            pointer-events: none;
+            z-index: 150; 
+        }
+        #joystick-zone { 
+            position: absolute; 
+            bottom: 40px; 
+            left: 40px; 
+            width: 120px; 
+            height: 120px; 
+            pointer-events: auto; 
+        }
+        #elevation-controls { 
+            position: absolute; 
+            bottom: 50px; 
+            right: 30px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 15px; 
+            pointer-events: auto; 
+        }
+        .circle-big { 
+            width: 60px; 
+            height: 60px; 
+            font-size: 24px; 
+            background: rgba(255,255,255,0.1); 
+        }
+        
+        /* Loading Spinner */
+        .loading {
+            display: inline-block; 
+            width: 20px; 
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3); 
+            border-radius: 50%;
+            border-top-color: #fff; 
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b; 
+        }
+
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
+    <!-- GENERATION SCREEN -->
+    <div id="generation-screen">
+        <div class="gen-container">
+            <div class="gen-header">
+                <h1 class="gen-title">🎨 AR 3D Model Generator</h1>
+                <p class="gen-subtitle">Convert images to 3D models for AR placement</p>
+            </div>
+
+            <div class="gen-grid">
+                <!-- Left Panel: Controls -->
+                <div class="gen-panel">
+                    <h3 class="gen-section-title">📸 Upload Image</h3>
+                    <div class="drop-zone" id="gen-drop-zone">
+                        <input type="file" id="gen-image-input" accept="image/*">
+                        <div id="gen-upload-placeholder">
+                            <i class="fas fa-cloud-upload-alt drop-zone-icon"></i>
+                            <p class="drop-zone-text">Click or drag image here</p>
+                        </div>
+                        <img id="gen-preview-image" class="hidden" alt="Preview">
+                    </div>
+
+                    <div style="margin-top: 20px;">
+                        <button id="gen-generate-btn" class="gen-btn" disabled>
+                            <i class="fas fa-magic"></i>
+                            <span>Generate 3D Model</span>
+                        </button>
+                    </div>
+
+                    <div style="margin-top: 15px;">
+                        <h3 class="gen-section-title">📋 Generation Logs</h3>
+                        <div class="gen-logs" id="gen-logs">
+                            <div class="gen-log-line" style="color: #64748b;">// Logs will appear here...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Panel: Preview -->
+                <div class="gen-panel" style="position: relative;">
+                    <h3 class="gen-section-title">🎭 3D Preview</h3>
+                    <div style="position: relative;">
+                        <div id="gen-viewer-placeholder" style="background: #1e293b; border-radius: 0.75rem; height: 350px; display: flex; align-items: center; justify-content: center; flex-direction: column;">
+                            <i class="fas fa-cube" style="font-size: 4rem; color: #475569; margin-bottom: 15px;"></i>
+                            <span style="color: #64748b;">Model will appear here</span>
+                        </div>
+
+                        <div id="gen-loading-overlay" class="gen-loading-overlay hidden">
+                            <div class="gen-spinner"></div>
+                            <p class="gen-loading-text" id="gen-loading-text">Initializing...</p>
+                        </div>
+
+                        <model-viewer id="gen-model-viewer" 
+                            camera-controls 
+                            auto-rotate 
+                            shadow-intensity="1"
+                            touch-action="pan-y"
+                            class="hidden">
+                        </model-viewer>
+                    </div>
+
+                    <div id="gen-result-actions" class="hidden" style="margin-top: 15px; display: grid; gap: 10px;">
+                        <button id="gen-save-to-library-btn" class="gen-btn">
+                            <i class="fas fa-save"></i>
+                            <span>Save to Library & Start AR</span>
+                        </button>
+                        <a id="gen-download-link" href="#" target="_blank" class="gen-btn gen-btn-secondary" style="text-decoration: none;">
+                            <i class="fas fa-download"></i>
+                            <span>Download ZIP</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px; text-align: center;">
+                <button id="gen-skip-btn" class="gen-btn gen-btn-secondary" style="max-width: 400px; margin: 0 auto;">
+                    <i class="fas fa-forward"></i>
+                    <span>Skip Generation & Start AR</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- START SCREEN -->
     <div id="start-screen">
-        <h2>AR Library</h2>
-        <p id="status-text">Memuat sistem...</p>
+        <h2>AR Object Placement</h2>
+        <p id="status-text"><span class="loading"></span>Memeriksa WebXR...</p>
         <button id="btn-start" class="interactive" disabled>Mulai AR</button>
     </div>
 
-    <div id="overlay-container">
-        <div id="hud-top">
-            <button id="btn-reset" class="icon-btn interactive">↺</button>
-            <button id="btn-exit" class="icon-btn red interactive">✕</button>
-        </div>
+    <!-- MAIN DOM OVERLAY ROOT -->
+    <div id="ar-root">
         
-        <div style="flex:1"></div>
-        
-        <div id="hud-bottom">
-            <div id="toast">Pilih model & ketuk lantai</div>
+        <!-- STANDARD UI LAYER -->
+        <div id="standard-ui">
+            <div id="hud-top">
+                <button id="btn-reset" class="icon-btn interactive">↺</button>
+                <button id="btn-exit" class="icon-btn red interactive">✕</button>
+            </div>
             
-            <div id="idle-menu">
-                <button id="btn-library" class="btn-main interactive">📂 Library 3D</button>
+            <div style="flex:1"></div>
+            
+            <div id="hud-bottom">
+                <div id="toast">Pilih model & ketuk lantai</div>
+                
+                <div id="idle-menu">
+                    <button id="btn-library" class="btn-main interactive">📂 Library 3D</button>
+                </div>
+
+                <div id="action-bar" class="interactive">
+                    <button id="btn-fpv" class="pill-btn btn-fpv">🚶 FPV</button>
+                    <div style="width:1px; height:20px; background:rgba(255,255,255,0.2); margin: 0 5px;"></div>
+                    <button id="btn-deselect" class="pill-btn">Batal</button>
+                    <button id="btn-delete" class="pill-btn btn-delete">Hapus</button>
+                </div>
             </div>
 
-            <div id="action-bar" class="interactive">
-                <button id="btn-fpv" class="pill-btn btn-fpv">🚶 FPV</button>
-                <div style="width:1px; height:20px; background:rgba(255,255,255,0.2); margin: 0 5px;"></div>
-                <button id="btn-deselect" class="pill-btn">Batal</button>
-                <button id="btn-delete" class="pill-btn btn-delete">Hapus</button>
+            <div id="library-drawer">
+                <div class="drawer-header">
+                    <h3>Pilih Model</h3>
+                    <button id="btn-close-lib" class="icon-btn" style="width:30px; height:30px; font-size:14px;">✕</button>
+                </div>
+                <div class="model-list" id="model-list-container"></div>
             </div>
         </div>
 
-        <div id="library-drawer">
-            <div class="drawer-header">
-                <h3>Pilih Aset 3D</h3>
-                <button id="btn-close-lib" class="icon-btn" style="width:30px; height:30px; font-size:14px;">✕</button>
+        <!-- FPV UI LAYER -->
+        <div id="fpv-ui">
+            <div style="position:absolute; top:20px; left:20px;">
+                <span style="background:var(--accent); color:white; padding:4px 10px; border-radius:10px; font-size:12px;">FPV MODE</span>
             </div>
-            <div class="model-list" id="model-list-container"></div>
+            <div style="position:absolute; top:20px; right:20px; pointer-events:auto;">
+                <button id="btn-exit-fpv" class="icon-btn interactive">✕</button>
+            </div>
+            <div id="joystick-zone"></div>
+            <div id="elevation-controls">
+                <button id="btn-up" class="icon-btn circle-big interactive">▲</button>
+                <button id="btn-down" class="icon-btn circle-big interactive">▼</button>
+            </div>
         </div>
-    </div>
 
-    <div id="fpv-ui">
-        <div style="position:absolute; top:20px; left:20px;">
-            <span style="background:var(--accent); color:white; padding:4px 10px; border-radius:10px; font-size:12px;">FPV MODE</span>
-        </div>
-        <div style="position:absolute; top:20px; right:20px; pointer-events:auto;">
-            <button id="btn-exit-fpv" class="icon-btn interactive">✕</button>
-        </div>
-        <div id="joystick-zone"></div>
-        <div id="elevation-controls">
-            <button id="btn-up" class="icon-btn circle-big interactive">▲</button>
-            <button id="btn-down" class="icon-btn circle-big interactive">▼</button>
-        </div>
     </div>
 
     <script src="https://unpkg.com/three@0.126.0/build/three.js"></script>
     <script src="https://unpkg.com/three@0.126.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script type="module" src="src/main.js"></script>
 
-    <script>
-        // --- KONFIGURASI ASET ---
-        const ASSETS = [
-            { id: 1, name: "Tower House", file: "3d_assets/tower_house_design.glb", icon: "🏠" },
-            { id: 2, name: "Model Kedua", file: "3d_assets/Astronaut.glb", icon: "🧑‍🚀" }
-        ];
-
-        class ARApp {
-            constructor() {
-                this.placedObjects = [];
-                this.selectedObject = null;
-                this.reticle = null;
-                this.modelTemplate = null;
-                this.activeAssetId = ASSETS[0].id;
-                this.currentModelUrl = ASSETS[0].file;
-                this.fpvMode = false;
-                this.isUIInteraction = false;
-                this.isDragging = false;
-                this.touchStartX = 0;
-                this.initialRotation = 0;
-                this.startDist = 0;
-                this.startScale = 1;
-
-                this.initUI();
-                this.renderLibrary();
-                this.checkXR();
-            }
-
-            initUI() {
-                document.getElementById('btn-start').onclick = () => this.startAR();
-                document.getElementById('btn-exit').onclick = () => this.endAR();
-                document.getElementById('btn-reset').onclick = () => this.resetScene();
-
-                // Library Control
-                document.getElementById('btn-library').onclick = (e) => {
-                    e.stopPropagation();
-                    this.isUIInteraction = true;
-                    document.getElementById('library-drawer').classList.add('open');
-                };
-                document.getElementById('btn-close-lib').onclick = (e) => {
-                    e.stopPropagation();
-                    document.getElementById('library-drawer').classList.remove('open');
-                };
-
-                // Actions
-                this.bindButton('btn-delete', () => this.deleteObject());
-                this.bindButton('btn-deselect', () => this.deselect());
-                this.bindButton('btn-fpv', () => this.enterFPV());
-                document.getElementById('btn-exit-fpv').onclick = () => this.exitFPV();
-
-                const setupHold = (id, val) => {
-                    const btn = document.getElementById(id);
-                    const start = (e) => { e.preventDefault(); this.verticalSpeed = val; };
-                    const end = (e) => { e.preventDefault(); this.verticalSpeed = 0; };
-                    btn.ontouchstart = start; btn.ontouchend = end;
-                    btn.onmousedown = start; btn.onmouseup = end;
-                };
-                setupHold('btn-up', 0.02);
-                setupHold('btn-down', -0.02);
-
-                const uiElements = document.querySelectorAll('.interactive, #library-drawer');
-                uiElements.forEach(el => {
-                    el.addEventListener('touchstart', () => { this.isUIInteraction = true; });
-                    el.addEventListener('touchend', () => { setTimeout(() => { this.isUIInteraction = false; }, 200); });
-                    el.addEventListener('click', (e) => { e.stopPropagation(); this.isUIInteraction = true; setTimeout(() => { this.isUIInteraction = false; }, 200); });
-                });
-
-                window.addEventListener('touchstart', (e) => this.onTouchStart(e), {passive: false});
-                window.addEventListener('touchmove', (e) => this.onTouchMove(e), {passive: false});
-                window.addEventListener('touchend', () => this.onTouchEnd());
-            }
-
-            bindButton(id, callback) {
-                const btn = document.getElementById(id);
-                btn.onclick = (e) => { e.stopPropagation(); callback(); };
-            }
-
-            renderLibrary() {
-                const container = document.getElementById('model-list-container');
-                container.innerHTML = '';
-                ASSETS.forEach(asset => {
-                    const card = document.createElement('div');
-                    card.className = `model-card ${asset.id === this.activeAssetId ? 'active' : ''}`;
-                    card.innerHTML = `<span class="model-icon">${asset.icon}</span><div class="model-name">${asset.name}</div>`;
-                    card.onclick = (e) => { e.stopPropagation(); this.selectModelFromLibrary(asset); };
-                    container.appendChild(card);
-                });
-            }
-
-            selectModelFromLibrary(asset) {
-                this.activeAssetId = asset.id;
-                this.currentModelUrl = asset.file;
-                this.renderLibrary();
-                document.getElementById('toast').innerText = `Memuat ${asset.name}...`;
-                const loader = new THREE.GLTFLoader();
-                loader.load(this.currentModelUrl, (gltf) => {
-                    this.modelTemplate = gltf.scene;
-                    document.getElementById('toast').innerText = `${asset.name} Siap!`;
-                    document.getElementById('library-drawer').classList.remove('open');
-                }, undefined, (err) => {
-                    document.getElementById('toast').innerText = `Gagal: ${asset.file} tidak ditemukan`;
-                    console.error(err);
-                });
-            }
-
-            onTouchStart(e) {
-                if (!this.selectedObject || this.fpvMode) return;
-                this.isDragging = false; 
-                if (e.touches.length === 2) {
-                    const dx = e.touches[0].pageX - e.touches[1].pageX;
-                    const dy = e.touches[0].pageY - e.touches[1].pageY;
-                    this.startDist = Math.hypot(dx, dy);
-                    this.startScale = this.selectedObject.scale.x;
-                }
-                if (e.touches.length === 1) {
-                    this.touchStartX = e.touches[0].pageX;
-                    this.initialRotation = this.selectedObject.rotation.y;
-                }
-            }
-
-            onTouchMove(e) {
-                if (!this.selectedObject || this.fpvMode) return;
-                if (e.touches.length === 2) {
-                    e.preventDefault(); 
-                    this.isDragging = true; 
-                    const dx = e.touches[0].pageX - e.touches[1].pageX;
-                    const dy = e.touches[0].pageY - e.touches[1].pageY;
-                    const currDist = Math.hypot(dx, dy);
-                    if (this.startDist > 0) {
-                        const scaleFactor = currDist / this.startDist;
-                        let newScale = this.startScale * scaleFactor;
-                        newScale = Math.max(0.1, Math.min(newScale, 5.0));
-                        this.selectedObject.scale.set(newScale, newScale, newScale);
-                        this.updateBox();
-                    }
-                } else if (e.touches.length === 1) {
-                    const dx = e.touches[0].pageX - this.touchStartX;
-                    if (Math.abs(dx) > 10) {
-                        e.preventDefault();
-                        this.isDragging = true; 
-                        const sensitivity = 0.01;
-                        this.selectedObject.rotation.y = this.initialRotation + (dx * sensitivity);
-                        this.updateBox();
-                    }
-                }
-            }
-            onTouchEnd() { setTimeout(() => { this.isDragging = false; }, 100); }
-
-            async checkXR() {
-                if (navigator.xr && await navigator.xr.isSessionSupported('immersive-ar')) {
-                    document.getElementById('status-text').innerText = "Siap.";
-                    document.getElementById('btn-start').disabled = false;
-                } else { document.getElementById('status-text').innerText = "AR Tidak Didukung."; }
-            }
-
-            async startAR() {
-                document.getElementById('start-screen').style.display = 'none';
-                document.getElementById('overlay-container').style.display = 'flex';
-                this.session = await navigator.xr.requestSession('immersive-ar', {
-                    requiredFeatures: ['hit-test'], optionalFeatures: ['dom-overlay'],
-                    domOverlay: { root: document.getElementById('overlay-container') }
-                });
-                this.renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-                this.renderer.autoClear = false;
-                this.renderer.outputEncoding = THREE.sRGBEncoding;
-                this.session.addEventListener('select', (e) => this.onSelect(e));
-                this.session.addEventListener('end', () => this.endAR());
-                this.scene = new THREE.Scene();
-                const light = new THREE.DirectionalLight(0xffffff, 1);
-                light.position.set(5, 10, 7);
-                this.scene.add(light);
-                this.scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-                this.camera = new THREE.PerspectiveCamera();
-                this.camera.matrixAutoUpdate = false;
-                const loader = new THREE.GLTFLoader();
-                loader.load('https://immersive-web.github.io/webxr-samples/media/gltf/reticle/reticle.gltf', (gltf) => {
-                    this.reticle = gltf.scene;
-                    this.reticle.visible = false;
-                    this.scene.add(this.reticle);
-                });
-                this.selectModelFromLibrary(ASSETS[0]);
-                const boxGeo = new THREE.BoxGeometry(1, 1, 1);
-                const boxMat = new THREE.LineBasicMaterial({ color: 0xffff00 });
-                this.highlight = new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), boxMat);
-                this.highlight.visible = false;
-                this.scene.add(this.highlight);
-                const gl = this.renderer.getContext();
-                await gl.makeXRCompatible();
-                this.session.updateRenderState({ baseLayer: new XRWebGLLayer(this.session, gl) });
-                this.refSpace = await this.session.requestReferenceSpace('local');
-                this.viewerSpace = await this.session.requestReferenceSpace('viewer');
-                this.hitTestSource = await this.session.requestHitTestSource({ space: this.viewerSpace });
-                this.session.requestAnimationFrame((t, f) => this.render(t, f));
-            }
-
-            onSelect(event) {
-                if (this.isUIInteraction || this.fpvMode || this.isDragging) return;
-                const frame = event.frame;
-                const inputSource = event.inputSource;
-                if (inputSource.targetRaySpace) {
-                    const pose = frame.getPose(inputSource.targetRaySpace, this.refSpace);
-                    if (pose) {
-                        const origin = new THREE.Vector3(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
-                        const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(new THREE.Quaternion(pose.transform.orientation.x, pose.transform.orientation.y, pose.transform.orientation.z, pose.transform.orientation.w));
-                        const raycaster = new THREE.Raycaster(origin, direction);
-                        const intersects = raycaster.intersectObjects(this.placedObjects, true);
-                        if (intersects.length > 0) {
-                            let obj = intersects[0].object;
-                            while(obj.parent && !this.placedObjects.includes(obj)) obj = obj.parent;
-                            if (this.placedObjects.includes(obj)) {
-                                this.selectObject(obj);
-                                return;
-                            }
-                        }
-                    }
-                }
-                if (this.reticle && this.reticle.visible && this.modelTemplate && !this.selectedObject) {
-                    const clone = this.modelTemplate.clone();
-                    clone.position.copy(this.reticle.position);
-                    this.scene.add(clone);
-                    this.placedObjects.push(clone);
-                    this.selectObject(clone);
-                } else if (this.selectedObject) {
-                    this.deselect();
-                }
-            }
-
-            selectObject(obj) {
-                this.selectedObject = obj;
-                this.updateBox();
-                document.getElementById('action-bar').style.display = 'flex';
-                document.getElementById('idle-menu').style.display = 'none';
-                document.getElementById('toast').innerText = "1 Jari: Putar | 2 Jari: Cubit";
-            }
-
-            deselect() {
-                this.selectedObject = null;
-                this.highlight.visible = false;
-                document.getElementById('action-bar').style.display = 'none';
-                document.getElementById('idle-menu').style.display = 'flex';
-                document.getElementById('toast').innerText = "Ketuk lantai untuk menempatkan";
-            }
-
-            deleteObject() {
-                if (this.selectedObject) {
-                    this.scene.remove(this.selectedObject);
-                    this.placedObjects = this.placedObjects.filter(o => o !== this.selectedObject);
-                    this.deselect();
-                    document.getElementById('toast').innerText = "Objek dihapus";
-                }
-            }
-
-            updateBox() {
-                if(!this.selectedObject) return;
-                const box = new THREE.Box3().setFromObject(this.selectedObject);
-                const size = new THREE.Vector3(); box.getSize(size);
-                const center = new THREE.Vector3(); box.getCenter(center);
-                this.highlight.scale.copy(size);
-                this.highlight.position.copy(center);
-                this.highlight.rotation.copy(this.selectedObject.rotation);
-                this.highlight.visible = true;
-            }
-
-            enterFPV() {
-                if(!this.selectedObject) return;
-                this.fpvMode = true;
-                this.fpvObject = this.selectedObject;
-                this.savedT = { s: this.fpvObject.scale.clone(), p: this.fpvObject.position.clone(), r: this.fpvObject.rotation.clone() };
-                const big = this.savedT.s.x * 20; 
-                this.fpvObject.scale.set(big, big, big);
-                document.getElementById('overlay-container').style.display = 'none';
-                document.getElementById('fpv-ui').style.display = 'block';
-                this.joystick = nipplejs.create({ zone: document.getElementById('joystick-zone'), mode: 'static', position: {left: '50%', top: '50%'}, color: 'white' });
-                this.moveVec = {x:0, z:0};
-                this.joystick.on('move', (evt, data) => { if(data.vector) { this.moveVec.z = data.vector.y; this.moveVec.x = data.vector.x; } });
-                this.joystick.on('end', () => this.moveVec = {x:0, z:0});
-            }
-
-            exitFPV() {
-                if(this.fpvObject) {
-                    this.fpvObject.scale.copy(this.savedT.s);
-                    this.fpvObject.position.copy(this.savedT.p);
-                    this.fpvObject.rotation.copy(this.savedT.r);
-                }
-                if(this.joystick) this.joystick.destroy();
-                this.fpvMode = false;
-                document.getElementById('fpv-ui').style.display = 'none';
-                document.getElementById('overlay-container').style.display = 'flex';
-            }
-
-            render(t, frame) {
-                this.session.requestAnimationFrame((t, f) => this.render(t, f));
-                const pose = frame.getViewerPose(this.refSpace);
-                if (pose) {
-                    if (!this.fpvMode && this.hitTestSource) {
-                        const res = frame.getHitTestResults(this.hitTestSource);
-                        if (res.length > 0) {
-                            const hit = res[0].getPose(this.refSpace);
-                            this.reticle.visible = true;
-                            this.reticle.position.copy(hit.transform.position);
-                            this.reticle.updateMatrixWorld(true);
-                        } else this.reticle.visible = false;
-                    }
-                    if (this.fpvMode && this.fpvObject) {
-                        const view = pose.views[0];
-                        const mat = new THREE.Matrix4().fromArray(view.transform.matrix);
-                        const fwd = new THREE.Vector3(0,0,-1).applyMatrix4(mat); fwd.y=0; fwd.normalize();
-                        const right = new THREE.Vector3(1,0,0).applyMatrix4(mat); right.y=0; right.normalize();
-                        const spd = 0.05;
-                        const move = new THREE.Vector3();
-                        if(Math.abs(this.moveVec.z)>0.1) move.add(fwd.multiplyScalar(this.moveVec.z * spd));
-                        if(Math.abs(this.moveVec.x)>0.1) move.add(right.multiplyScalar(-this.moveVec.x * spd));
-                        move.y += this.verticalSpeed || 0;
-                        this.fpvObject.position.add(move);
-                    }
-                    const gl = this.renderer.getContext();
-                    gl.bindFramebuffer(gl.FRAMEBUFFER, this.session.renderState.baseLayer.framebuffer);
-                    this.renderer.clear();
-                    for (const view of pose.views) {
-                        const vp = this.session.renderState.baseLayer.getViewport(view);
-                        this.renderer.setSize(vp.width, vp.height);
-                        this.camera.matrix.fromArray(view.transform.matrix);
-                        this.camera.projectionMatrix.fromArray(view.projectionMatrix);
-                        this.camera.updateMatrixWorld(true);
-                        this.renderer.render(this.scene, this.camera);
-                    }
-                }
-            }
-
-            endAR() {
-                this.session.end();
-                document.getElementById('start-screen').style.display = 'block';
-                document.getElementById('overlay-container').style.display = 'none';
-            }
-            resetScene() {
-                this.placedObjects.forEach(o => this.scene.remove(o));
-                this.placedObjects = [];
-                this.deselect();
-            }
-        }
-        window.onload = () => new ARApp();
-    </script>
 </body>
 </html>
